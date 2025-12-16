@@ -3,30 +3,18 @@ import { useBrickStore } from '../store/useBrickStore';
 import { Brick } from './Brick';
 import { PlacedBrick, getBrickType, getBrickHeight } from '../types/brick';
 import { snapToGrid, getBrickFootprint } from '../utils/snapToGrid';
+import { rotatePoint, boxesOverlap } from '../utils/math';
 
 /**
- * Rotate a point around origin by 90 degree increments
- */
-const rotatePoint = (x: number, z: number, rotation: number): [number, number] => {
-  const r = rotation % 4;
-  switch (r) {
-    case 0: return [x, z];
-    case 1: return [-z, x];
-    case 2: return [-x, -z];
-    case 3: return [z, -x];
-    default: return [x, z];
-  }
-};
-
-/**
- * Apply group rotation to source bricks
+ * Apply group rotation to source bricks around their center
  */
 const applyGroupRotation = (
   sourceBricks: PlacedBrick[],
   groupRotation: number
 ): PlacedBrick[] => {
-  if (groupRotation === 0) return sourceBricks;
+  if (groupRotation === 0 || sourceBricks.length === 0) return sourceBricks;
 
+  // Calculate center
   let sumX = 0, sumZ = 0;
   for (const brick of sourceBricks) {
     sumX += brick.position[0];
@@ -53,7 +41,7 @@ const applyGroupRotation = (
 };
 
 /**
- * Checks if a single brick at given position collides with existing bricks
+ * Check if a single brick collides with existing bricks
  */
 const checkBrickCollision = (
   brickX: number, brickY: number, brickZ: number,
@@ -82,20 +70,14 @@ const checkBrickCollision = (
     const existingBottomY = existing.position[1] - existingHeight / 2;
     const existingTopY = existing.position[1] + existingHeight / 2;
 
-    const overlapX = brickFootprint.minX < existingFootprint.maxX - epsilon &&
-                     brickFootprint.maxX > existingFootprint.minX + epsilon;
-    const overlapZ = brickFootprint.minZ < existingFootprint.maxZ - epsilon &&
-                     brickFootprint.maxZ > existingFootprint.minZ + epsilon;
-
-    if (overlapX && overlapZ) {
+    if (boxesOverlap(brickFootprint, existingFootprint, epsilon)) {
       const overlapY = brickBottomY < existingTopY - epsilon &&
                        brickTopY > existingBottomY + epsilon;
       if (overlapY) return true;
     }
   }
 
-  if (brickBottomY < -0.01) return true;
-  return false;
+  return brickBottomY < -0.01;
 };
 
 /**
@@ -105,8 +87,7 @@ const findCandidateYPositions = (
   bricks: PlacedBrick[],
   existingBricks: PlacedBrick[]
 ): number[] => {
-  const candidates = new Set<number>();
-  candidates.add(0);
+  const candidates = new Set<number>([0]);
 
   for (const brick of bricks) {
     const brickType = getBrickType(brick.typeId);
@@ -126,13 +107,7 @@ const findCandidateYPositions = (
         existingType.studsX, existingType.studsZ, existing.rotation
       );
 
-      const epsilon = 0.01;
-      const overlapX = brickFootprint.minX < existingFootprint.maxX - epsilon &&
-                       brickFootprint.maxX > existingFootprint.minX + epsilon;
-      const overlapZ = brickFootprint.minZ < existingFootprint.maxZ - epsilon &&
-                       brickFootprint.maxZ > existingFootprint.minZ + epsilon;
-
-      if (overlapX && overlapZ) {
+      if (boxesOverlap(brickFootprint, existingFootprint, 0.01)) {
         const existingHeight = getBrickHeight(existingType.variant);
         candidates.add(existing.position[1] + existingHeight / 2);
         candidates.add(existing.position[1] - existingHeight / 2 - getBrickHeight(brickType.variant));
@@ -172,10 +147,9 @@ const calculateGhostPositions = (
   existingBricks: PlacedBrick[],
   excludeIds: Set<string>,
   groupRotation: number
-): { ghosts: PlacedBrick[], isValid: boolean } => {
+): { ghosts: PlacedBrick[]; isValid: boolean } => {
   if (sourceBricks.length === 0) return { ghosts: [], isValid: false };
 
-  // Apply group rotation first
   const rotatedBricks = applyGroupRotation(sourceBricks, groupRotation);
 
   const anchorBrick = rotatedBricks[0];
@@ -223,6 +197,7 @@ const calculateGhostPositions = (
     }
   }
 
+  // Fallback: stack on top
   if (validBaseY === null) {
     let maxStackHeight = 0;
     for (const brick of offsetBricks) {
@@ -243,13 +218,7 @@ const calculateGhostPositions = (
           existingType.studsX, existingType.studsZ, existing.rotation
         );
 
-        const epsilon = 0.01;
-        const overlapX = brickFootprint.minX < existingFootprint.maxX - epsilon &&
-                         brickFootprint.maxX > existingFootprint.minX + epsilon;
-        const overlapZ = brickFootprint.minZ < existingFootprint.maxZ - epsilon &&
-                         brickFootprint.maxZ > existingFootprint.minZ + epsilon;
-
-        if (overlapX && overlapZ) {
+        if (boxesOverlap(brickFootprint, existingFootprint, 0.01)) {
           const existingHeight = getBrickHeight(existingType.variant);
           maxStackHeight = Math.max(maxStackHeight, existing.position[1] + existingHeight / 2);
         }
@@ -283,6 +252,7 @@ export const GhostPreview = () => {
   const clipboard = useBrickStore((state) => state.clipboard);
   const groupRotation = useBrickStore((state) => state.groupRotation);
   const setGhostValid = useBrickStore((state) => state.setGhostValid);
+  const setPendingGhostBricks = useBrickStore((state) => state.setPendingGhostBricks);
 
   const sourceBricks = useMemo(() => {
     if (mode === 'move') {
@@ -304,7 +274,8 @@ export const GhostPreview = () => {
 
   useEffect(() => {
     setGhostValid(ghostData.isValid);
-  }, [ghostData.isValid, setGhostValid]);
+    setPendingGhostBricks(ghostData.ghosts);
+  }, [ghostData.isValid, ghostData.ghosts, setGhostValid, setPendingGhostBricks]);
 
   if (mode !== 'move' && mode !== 'paste') return null;
   if (!cursorPosition || ghostData.ghosts.length === 0) return null;

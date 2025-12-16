@@ -23,9 +23,10 @@ export const Grid = () => {
   const clearSelection = useBrickStore((state) => state.clearSelection);
   const openContextMenu = useBrickStore((state) => state.openContextMenu);
   const mode = useBrickStore((state) => state.mode);
-  const ghostValid = useBrickStore((state) => state.ghostValid);
   const cancelMoveOrPaste = useBrickStore((state) => state.cancelMoveOrPaste);
   const confirmMoveOrPaste = useBrickStore((state) => state.confirmMoveOrPaste);
+  const rightClickStart = useBrickStore((state) => state.rightClickStart);
+  const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
@@ -61,7 +62,10 @@ export const Grid = () => {
         rotation,
         height,
         placedBricks,
-        layerOffset
+        layerOffset,
+        selectedBrickType.variant === 'slope',
+        selectedBrickType.isInverted ?? false,
+        selectedBrickType.variant === 'corner-slope'
       );
 
       // Only place brick if position is valid
@@ -77,8 +81,8 @@ export const Grid = () => {
     } else if (mode === 'select') {
       // Selection mode - clicking grid clears selection
       clearSelection();
-    } else if ((mode === 'move' || mode === 'paste') && ghostValid) {
-      // Move or Paste mode - left click places if valid
+    } else if (mode === 'move' || mode === 'paste') {
+      // Move or Paste mode - use existing cursor position from pointer move
       confirmMoveOrPaste();
     }
   };
@@ -87,11 +91,22 @@ export const Grid = () => {
     e.stopPropagation();
     e.nativeEvent.preventDefault();
 
+    // Check if mouse moved significantly (user was orbiting)
+    const MOVE_THRESHOLD = 5;
+    if (rightClickStart) {
+      const dx = e.nativeEvent.clientX - rightClickStart.x;
+      const dy = e.nativeEvent.clientY - rightClickStart.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      setRightClickStart(null);
+
+      if (distance > MOVE_THRESHOLD) {
+        return;
+      }
+    }
+
     if (mode === 'select') {
-      // Selection mode - show context menu
       openContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY);
     } else if (mode === 'move' || mode === 'paste') {
-      // Move/Paste mode - right click cancels
       cancelMoveOrPaste();
     }
   };

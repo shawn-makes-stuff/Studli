@@ -1,51 +1,14 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useBrickStore } from '../store/useBrickStore';
 import { BRICK_TYPES } from '../types/brick';
-
-// Icons
-const BrickIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-    <rect x="3" y="8" width="18" height="10" rx="1" />
-    <rect x="5" y="5" width="4" height="3" rx="0.5" />
-    <rect x="10" y="5" width="4" height="3" rx="0.5" />
-    <rect x="15" y="5" width="4" height="3" rx="0.5" />
-  </svg>
-);
-
-const EditIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const RotateIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <path d="M23 4v6h-6" />
-    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-  </svg>
-);
-
-const UndoIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <path d="M3 10h10a5 5 0 0 1 5 5v2" />
-    <path d="M7 6L3 10l4 4" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </svg>
-);
-
-const HelpIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <circle cx="12" cy="12" r="10" />
-    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-    <path d="M12 17h.01" />
-  </svg>
-);
+import {
+  BrickIcon,
+  EditIcon,
+  RotateIcon,
+  UndoIcon,
+  TrashIcon,
+  HelpIcon
+} from './Icons';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -88,6 +51,37 @@ interface HelpPopoutProps {
 const HelpPopout = ({ isOpen, onClose }: HelpPopoutProps) => {
   if (!isOpen) return null;
 
+  const sections = [
+    {
+      title: 'Mouse',
+      items: [
+        ['Left Click', 'Place / Select'],
+        ['Right Click', 'Cancel (move/paste)'],
+        ['Right Drag', 'Rotate view'],
+        ['Scroll', 'Zoom'],
+      ]
+    },
+    {
+      title: 'Keyboard',
+      items: [
+        ['R', 'Rotate'],
+        ['Enter', 'Confirm move/paste'],
+        ['W / ↑', 'Layer up'],
+        ['S / ↓', 'Layer down'],
+        ['Escape', 'Cancel'],
+        ['Delete', 'Delete selected'],
+      ]
+    },
+    {
+      title: 'Shortcuts',
+      items: [
+        ['Ctrl+Z / Y', 'Undo / Redo'],
+        ['Ctrl+C / V', 'Copy / Paste'],
+        ['Ctrl+A', 'Select all'],
+      ]
+    }
+  ];
+
   return (
     <div
       className="absolute top-full right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-600 p-4 w-72 z-50"
@@ -98,49 +92,63 @@ const HelpPopout = ({ isOpen, onClose }: HelpPopoutProps) => {
         <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
       </div>
       <div className="text-sm text-gray-400 space-y-3">
-        <div>
-          <div className="text-gray-300 font-medium mb-1">Mouse</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <span className="text-gray-200">Left Click</span>
-            <span>Place / Select</span>
-            <span className="text-gray-200">Right Click</span>
-            <span>Cancel (move/paste)</span>
-            <span className="text-gray-200">Right Drag</span>
-            <span>Rotate view</span>
-            <span className="text-gray-200">Scroll</span>
-            <span>Zoom</span>
+        {sections.map(section => (
+          <div key={section.title}>
+            <div className="text-gray-300 font-medium mb-1">{section.title}</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {section.items.map(([key, desc]) => (
+                <React.Fragment key={key}>
+                  <span className="text-gray-200">{key}</span>
+                  <span>{desc}</span>
+                </React.Fragment>
+              ))}
+            </div>
           </div>
-        </div>
-        <div>
-          <div className="text-gray-300 font-medium mb-1">Keyboard</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <span className="text-gray-200">R</span>
-            <span>Rotate</span>
-            <span className="text-gray-200">Enter</span>
-            <span>Confirm move/paste</span>
-            <span className="text-gray-200">W / ↑</span>
-            <span>Layer up</span>
-            <span className="text-gray-200">S / ↓</span>
-            <span>Layer down</span>
-            <span className="text-gray-200">Escape</span>
-            <span>Cancel</span>
-            <span className="text-gray-200">Delete</span>
-            <span>Delete selected</span>
-          </div>
-        </div>
-        <div>
-          <div className="text-gray-300 font-medium mb-1">Shortcuts</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <span className="text-gray-200">Ctrl+Z / Y</span>
-            <span>Undo / Redo</span>
-            <span className="text-gray-200">Ctrl+C / V</span>
-            <span>Copy / Paste</span>
-            <span className="text-gray-200">Ctrl+A</span>
-            <span>Select all</span>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
+  );
+};
+
+interface ToolbarButtonProps {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  title: string;
+  variant?: 'default' | 'success' | 'purple' | 'danger';
+  children: React.ReactNode;
+}
+
+const ToolbarButton = ({
+  onClick,
+  disabled = false,
+  active = false,
+  title,
+  variant = 'default',
+  children
+}: ToolbarButtonProps) => {
+  const baseClasses = 'p-3 rounded-xl shadow-lg transition-all';
+
+  const variantClasses = {
+    default: disabled
+      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+      : 'bg-gray-700 text-white hover:bg-gray-600',
+    success: 'bg-green-600 text-white hover:bg-green-500',
+    purple: 'bg-purple-600 text-white hover:bg-purple-500',
+    danger: disabled
+      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+      : 'bg-gray-700 text-red-400 hover:bg-red-600 hover:text-white'
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseClasses} ${active ? variantClasses[variant] : variantClasses[variant === 'success' || variant === 'purple' ? variant : 'default']}`}
+      title={title}
+    >
+      {children}
+    </button>
   );
 };
 
@@ -165,7 +173,6 @@ export const FloatingToolbar = () => {
   const isEditMode = mode === 'select';
   const hasSelection = selectedBrickIds.size > 0;
 
-  // Rotate is available in build mode, edit mode with selection, or move/paste mode
   const canRotate = isBuildMode || isMovingOrPasting || (isEditMode && hasSelection);
 
   const toggleMode = () => {
@@ -195,70 +202,40 @@ export const FloatingToolbar = () => {
     <>
       {/* Center Toolbar */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-40">
-        {/* Build/Edit Toggle */}
-        <button
+        <ToolbarButton
           onClick={toggleMode}
-          className={`
-            p-3 rounded-xl shadow-lg transition-all
-            ${isBuildMode
-              ? 'bg-green-600 text-white hover:bg-green-500'
-              : 'bg-purple-600 text-white hover:bg-purple-500'
-            }
-          `}
+          variant={isBuildMode ? 'success' : 'purple'}
+          active
           title={isBuildMode ? 'Build Mode (click to edit)' : 'Edit Mode (click to build)'}
         >
           {isBuildMode ? <BrickIcon /> : <EditIcon />}
-        </button>
+        </ToolbarButton>
 
-        {/* Rotate Button */}
-        <button
+        <ToolbarButton
           onClick={handleRotate}
           disabled={!canRotate}
-          className={`
-            p-3 rounded-xl shadow-lg transition-all
-            ${!canRotate
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gray-700 text-white hover:bg-gray-600'
-            }
-          `}
           title="Rotate (R)"
         >
           <RotateIcon />
-        </button>
+        </ToolbarButton>
 
-        {/* Undo Button */}
-        <button
+        <ToolbarButton
           onClick={undo}
           disabled={past.length === 0}
-          className={`
-            p-3 rounded-xl shadow-lg transition-all
-            ${past.length === 0
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gray-700 text-white hover:bg-gray-600'
-            }
-          `}
           title="Undo (Ctrl+Z)"
         >
           <UndoIcon />
-        </button>
+        </ToolbarButton>
 
-        {/* Delete/Clear Button */}
-        <button
+        <ToolbarButton
           onClick={() => setShowClearConfirm(true)}
           disabled={placedBricks.length === 0}
-          className={`
-            p-3 rounded-xl shadow-lg transition-all
-            ${placedBricks.length === 0
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gray-700 text-red-400 hover:bg-red-600 hover:text-white'
-            }
-          `}
+          variant="danger"
           title="Clear Canvas"
         >
           <TrashIcon />
-        </button>
+        </ToolbarButton>
 
-        {/* Mode Label */}
         <div className={`
           px-3 py-2 rounded-lg text-sm font-medium
           ${isBuildMode ? 'bg-green-600/20 text-green-400' : 'bg-purple-600/20 text-purple-400'}
@@ -267,22 +244,17 @@ export const FloatingToolbar = () => {
         </div>
       </div>
 
-      {/* Help Button - Top Right */}
+      {/* Help Button */}
       <div className="fixed top-4 right-4 z-40">
         <div className="relative">
-          <button
+          <ToolbarButton
             onClick={() => setShowHelp(!showHelp)}
-            className={`
-              p-3 rounded-xl shadow-lg transition-all
-              ${showHelp
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-white hover:bg-gray-600'
-              }
-            `}
+            active={showHelp}
+            variant={showHelp ? 'default' : 'default'}
             title="Controls Help"
           >
             <HelpIcon />
-          </button>
+          </ToolbarButton>
           <HelpPopout isOpen={showHelp} onClose={() => setShowHelp(false)} />
         </div>
       </div>

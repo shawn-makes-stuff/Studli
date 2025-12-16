@@ -44,6 +44,7 @@ export const Scene = () => {
   const cancelMoveOrPaste = useBrickStore((state) => state.cancelMoveOrPaste);
   const confirmMoveOrPaste = useBrickStore((state) => state.confirmMoveOrPaste);
   const ghostValid = useBrickStore((state) => state.ghostValid);
+  const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
 
   // Keyboard controls
   useEffect(() => {
@@ -147,6 +148,11 @@ export const Scene = () => {
     <Canvas
       shadows
       camera={{ position: [15, 15, 15], fov: 50 }}
+      onPointerDown={(e) => {
+        if (e.button === 2) {
+          setRightClickStart({ x: e.clientX, y: e.clientY });
+        }
+      }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <ambientLight intensity={0.5} />

@@ -54,6 +54,154 @@ export const getBrickFootprint = (
 };
 
 /**
+ * Gets the stud footprint for a slope brick
+ * Regular slopes: only the back cell has studs
+ * Inverted slopes: full footprint has studs
+ * Corner slopes: only 1x1 cell at corner has stud
+ * Inverted corner slopes: full footprint has studs
+ * Returns the full footprint for non-slopes
+ */
+const getStudFootprint = (
+  centerX: number,
+  centerZ: number,
+  studsX: number,
+  studsZ: number,
+  rotation: number,
+  isSlope: boolean,
+  isInverted: boolean = false,
+  isCornerSlope: boolean = false
+): { minX: number; maxX: number; minZ: number; maxZ: number } => {
+  if (isCornerSlope && !isInverted) {
+    // Regular corner slopes have a 1x1 stud area at the back-left corner
+    const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
+    const halfX = (effectiveX * STUD_SPACING) / 2;
+    const halfZ = (effectiveZ * STUD_SPACING) / 2;
+
+    // 1x1 cell at back-left corner (considering rotation)
+    const studXMin = centerX - halfX;
+    const studXMax = studXMin + STUD_SPACING;
+    const studZMin = centerZ - halfZ;
+    const studZMax = studZMin + STUD_SPACING;
+
+    return {
+      minX: studXMin,
+      maxX: studXMax,
+      minZ: studZMin,
+      maxZ: studZMax
+    };
+  }
+
+  if (isCornerSlope && isInverted) {
+    // Inverted corner slopes have studs on full top surface
+    return getBrickFootprint(centerX, centerZ, studsX, studsZ, rotation);
+  }
+
+  if (!isSlope || isInverted) {
+    // Non-slopes and inverted slopes have studs on full top surface
+    return getBrickFootprint(centerX, centerZ, studsX, studsZ, rotation);
+  }
+
+  // For regular slopes, only the first cell (back edge) has studs
+  // Calculate based on rotation
+  const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
+  const halfX = (effectiveX * STUD_SPACING) / 2;
+  const halfZ = (effectiveZ * STUD_SPACING) / 2;
+
+  // The stud section is always one cell deep from the "back" edge
+  // Rotation 0/2: back is -Z, rotation 1/3: back is -X or +X
+  if (rotation % 2 === 0) {
+    // Rotation 0 or 2: studs are at back Z edge
+    const studZMin = centerZ - halfZ;
+    const studZMax = studZMin + STUD_SPACING;
+    return {
+      minX: centerX - halfX,
+      maxX: centerX + halfX,
+      minZ: studZMin,
+      maxZ: studZMax
+    };
+  } else {
+    // Rotation 1 or 3: studs are at back X edge
+    const studXMin = centerX - halfX;
+    const studXMax = studXMin + STUD_SPACING;
+    return {
+      minX: studXMin,
+      maxX: studXMax,
+      minZ: centerZ - halfZ,
+      maxZ: centerZ + halfZ
+    };
+  }
+};
+
+/**
+ * Gets the bottom connection footprint for a brick
+ * Regular bricks/slopes: full footprint
+ * Inverted slopes: only the back 1-stud section (where it can connect from below)
+ * Inverted corner slopes: only 1x1 at corner can connect from below
+ */
+const getBottomConnectionFootprint = (
+  centerX: number,
+  centerZ: number,
+  studsX: number,
+  studsZ: number,
+  rotation: number,
+  isSlope: boolean,
+  isInverted: boolean = false,
+  isCornerSlope: boolean = false
+): { minX: number; maxX: number; minZ: number; maxZ: number } => {
+  if (isCornerSlope && isInverted) {
+    // Inverted corner slopes: 1x1 connection area at back-left corner
+    const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
+    const halfX = (effectiveX * STUD_SPACING) / 2;
+    const halfZ = (effectiveZ * STUD_SPACING) / 2;
+
+    const connXMin = centerX - halfX;
+    const connXMax = connXMin + STUD_SPACING;
+    const connZMin = centerZ - halfZ;
+    const connZMax = connZMin + STUD_SPACING;
+
+    return {
+      minX: connXMin,
+      maxX: connXMax,
+      minZ: connZMin,
+      maxZ: connZMax
+    };
+  }
+
+  if (!isSlope || !isInverted) {
+    // Non-slopes and regular slopes use full footprint for bottom connection
+    return getBrickFootprint(centerX, centerZ, studsX, studsZ, rotation);
+  }
+
+  // For inverted slopes, only the back 1-stud section can connect from below
+  // (same pattern as where regular slopes have studs)
+  const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
+  const halfX = (effectiveX * STUD_SPACING) / 2;
+  const halfZ = (effectiveZ * STUD_SPACING) / 2;
+
+  if (rotation % 2 === 0) {
+    // Rotation 0 or 2: connection area is at back Z edge
+    const connZMin = centerZ - halfZ;
+    const connZMax = connZMin + STUD_SPACING;
+    return {
+      minX: centerX - halfX,
+      maxX: centerX + halfX,
+      minZ: connZMin,
+      maxZ: connZMax
+    };
+  } else {
+    // Rotation 1 or 3: connection area is at back X edge
+    const connXMin = centerX - halfX;
+    const connXMax = connXMin + STUD_SPACING;
+    return {
+      minX: connXMin,
+      maxX: connXMax,
+      minZ: centerZ - halfZ,
+      maxZ: centerZ + halfZ
+    };
+  }
+};
+
+/**
  * Checks if two footprints overlap (share any interior space)
  */
 const footprintsOverlap = (
@@ -71,6 +219,7 @@ interface BrickBounds {
   bottomY: number;
   topY: number;
   hasStuds: boolean;
+  studFootprint?: { minX: number; maxX: number; minZ: number; maxZ: number }; // For slopes - where studs actually are
 }
 
 /**
@@ -101,12 +250,30 @@ const getOverlappingBricks = (
 
     if (footprintsOverlap(newBrickFootprint, brickFootprint)) {
       const brickHeight = getBrickHeight(brickType.variant);
-      result.push({
+      const isSlope = brickType.variant === 'slope';
+
+      const bounds: BrickBounds = {
         footprint: brickFootprint,
         bottomY: brick.position[1] - brickHeight / 2,
         topY: brick.position[1] + brickHeight / 2,
         hasStuds: hasStuds(brickType.variant)
-      });
+      };
+
+      // For slopes and corner slopes, also track where studs actually are
+      if (isSlope || brickType.variant === 'corner-slope') {
+        bounds.studFootprint = getStudFootprint(
+          brick.position[0],
+          brick.position[2],
+          brickType.studsX,
+          brickType.studsZ,
+          brick.rotation,
+          isSlope,
+          brickType.isInverted ?? false,
+          brickType.variant === 'corner-slope'
+        );
+      }
+
+      result.push(bounds);
     }
   }
 
@@ -160,6 +327,8 @@ const wouldCollide = (
  * Connection requires touching ground OR a brick with studs from below OR any brick from above.
  * Tiles don't provide connection from below (no studs), but you can connect if
  * another studded brick at the same level is also being touched.
+ * For slopes, only the stud section can provide connection from below.
+ * For inverted slopes being placed, only their bottom 1-stud section needs to connect.
  */
 const isConnected = (
   gridX: number,
@@ -169,14 +338,28 @@ const isConnected = (
   rotation: number,
   bottomY: number,
   topY: number,
-  placedBricks: PlacedBrick[]
+  placedBricks: PlacedBrick[],
+  isSlope: boolean = false,
+  isInverted: boolean = false,
+  isCornerSlope: boolean = false
 ): boolean => {
   const epsilon = 0.01;
 
-  // Ground connection
-  if (bottomY < epsilon) return true;
+  // Ground connection - inverted slopes need their bottom connection area to touch ground
+  if (bottomY < epsilon) {
+    if ((isSlope || isCornerSlope) && isInverted) {
+      // For inverted slopes and corner slopes, we're already on ground, this is valid
+      return true;
+    }
+    return true;
+  }
 
   const newBrickFootprint = getBrickFootprint(gridX, gridZ, studsX, studsZ, rotation);
+
+  // For inverted slopes/corner slopes, use the restricted bottom connection footprint for checking connections from below
+  const bottomConnectionFootprint = (isSlope || isCornerSlope) && isInverted
+    ? getBottomConnectionFootprint(gridX, gridZ, studsX, studsZ, rotation, isSlope, isInverted, isCornerSlope)
+    : newBrickFootprint;
 
   for (const brick of placedBricks) {
     const brickType = getBrickType(brick.typeId);
@@ -198,7 +381,28 @@ const isConnected = (
 
     // Connected from below - only valid if the brick has studs
     if (Math.abs(bottomY - brickTopY) < epsilon && hasStuds(brickType.variant)) {
-      return true;
+      // For slopes and corner slopes, check if new brick overlaps with stud footprint
+      if (brickType.variant === 'slope' || brickType.variant === 'corner-slope') {
+        const studFootprint = getStudFootprint(
+          brick.position[0],
+          brick.position[2],
+          brickType.studsX,
+          brickType.studsZ,
+          brick.rotation,
+          brickType.variant === 'slope',
+          brickType.isInverted ?? false,
+          brickType.variant === 'corner-slope'
+        );
+        // Use bottom connection footprint for inverted slopes being placed
+        if (footprintsOverlap(bottomConnectionFootprint, studFootprint)) {
+          return true;
+        }
+      } else {
+        // Regular brick - check if bottom connection footprint overlaps
+        if (footprintsOverlap(bottomConnectionFootprint, brickFootprint)) {
+          return true;
+        }
+      }
     }
 
     // Connected from above (our top touches their bottom)
@@ -221,7 +425,10 @@ export const findValidLayers = (
   studsZ: number,
   rotation: number,
   newBrickHeight: number,
-  placedBricks: PlacedBrick[]
+  placedBricks: PlacedBrick[],
+  isSlope: boolean = false,
+  isInverted: boolean = false,
+  isCornerSlope: boolean = false
 ): number[] => {
   const overlappingBricks = getOverlappingBricks(gridX, gridZ, studsX, studsZ, rotation, placedBricks);
 
@@ -256,7 +463,7 @@ export const findValidLayers = (
     }
 
     // Must be connected to ground or a studded brick
-    if (!isConnected(gridX, gridZ, studsX, studsZ, rotation, bottomY, topY, placedBricks)) {
+    if (!isConnected(gridX, gridZ, studsX, studsZ, rotation, bottomY, topY, placedBricks, isSlope, isInverted, isCornerSlope)) {
       continue;
     }
 
@@ -326,10 +533,13 @@ export const getLayerPosition = (
   rotation: number,
   newBrickHeight: number,
   placedBricks: PlacedBrick[],
-  layerOffset: number
+  layerOffset: number,
+  isSlope: boolean = false,
+  isInverted: boolean = false,
+  isCornerSlope: boolean = false
 ): LayerPositionResult => {
   const validLayers = findValidLayers(
-    gridX, gridZ, studsX, studsZ, rotation, newBrickHeight, placedBricks
+    gridX, gridZ, studsX, studsZ, rotation, newBrickHeight, placedBricks, isSlope, isInverted, isCornerSlope
   );
 
   if (validLayers.length === 0) {

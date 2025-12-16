@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import {
   STUD_SPACING,
-  STUD_RADIUS,
   STUD_HEIGHT,
   getBrickHeight,
-  hasStuds
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
 import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
+import { getCachedSlopeGeometry, getCachedCornerSlopeGeometry, calculateStudPositions, getStudGeometry } from '../utils/geometry';
 
 export const BrickPreview = () => {
   const cursorPosition = useBrickStore((state) => state.cursorPosition);
@@ -18,14 +17,14 @@ export const BrickPreview = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
   const mode = useBrickStore((state) => state.mode);
 
-  // Calculate dimensions (safe even if selectedBrickType is null)
-  const originalWidth = (selectedBrickType?.studsX ?? 1) * STUD_SPACING;
-  const originalDepth = (selectedBrickType?.studsZ ?? 1) * STUD_SPACING;
+  const width = (selectedBrickType?.studsX ?? 1) * STUD_SPACING;
+  const depth = (selectedBrickType?.studsZ ?? 1) * STUD_SPACING;
   const height = selectedBrickType ? getBrickHeight(selectedBrickType.variant) : 1;
-  const showStuds = selectedBrickType ? hasStuds(selectedBrickType.variant) : true;
+  const isSlope = selectedBrickType?.variant === 'slope';
+  const isCornerSlope = selectedBrickType?.variant === 'corner-slope';
+  const isInverted = selectedBrickType?.isInverted ?? false;
 
-  // Calculate snapped position reactively (responds to rotation changes)
-  // All hooks must be called before any conditional returns
+  // Calculate preview position and validity
   const previewData = useMemo(() => {
     if (!cursorPosition || !selectedBrickType) return null;
 
@@ -45,7 +44,10 @@ export const BrickPreview = () => {
       rotation,
       height,
       placedBricks,
-      layerOffset
+      layerOffset,
+      selectedBrickType.variant === 'slope',
+      selectedBrickType.isInverted ?? false,
+      selectedBrickType.variant === 'corner-slope'
     );
 
     return {
@@ -54,32 +56,31 @@ export const BrickPreview = () => {
     };
   }, [cursorPosition, selectedBrickType, rotation, layerOffset, placedBricks, height]);
 
-  // Generate stud positions using ORIGINAL dimensions (before rotation)
+  // Get cached slope geometry
+  const slopeGeometry = useMemo(() => {
+    if (!isSlope) return null;
+    return getCachedSlopeGeometry(width, height, depth, isInverted);
+  }, [isSlope, width, height, depth, isInverted]);
+
+  // Get cached corner slope geometry
+  const cornerSlopeGeometry = useMemo(() => {
+    if (!isCornerSlope) return null;
+    return getCachedCornerSlopeGeometry(width, height, depth, isInverted);
+  }, [isCornerSlope, width, height, depth, isInverted]);
+
+  // Get shared stud geometry
+  const studGeometry = useMemo(() => getStudGeometry(), []);
+
+  // Calculate stud positions
   const studPositions = useMemo(() => {
-    if (!selectedBrickType || !showStuds) return [];
+    if (!selectedBrickType) return [];
+    return calculateStudPositions(selectedBrickType.studsX, selectedBrickType.studsZ, depth, selectedBrickType.variant, isInverted);
+  }, [selectedBrickType, depth, isInverted]);
 
-    const positions: [number, number][] = [];
-    const studsX = selectedBrickType.studsX;
-    const studsZ = selectedBrickType.studsZ;
-    const startX = -(studsX - 1) / 2 * STUD_SPACING;
-    const startZ = -(studsZ - 1) / 2 * STUD_SPACING;
-
-    for (let x = 0; x < studsX; x++) {
-      for (let z = 0; z < studsZ; z++) {
-        positions.push([
-          startX + x * STUD_SPACING,
-          startZ + z * STUD_SPACING
-        ]);
-      }
-    }
-    return positions;
-  }, [selectedBrickType, showStuds]);
-
-  // Now we can have conditional returns after all hooks
+  // Don't render if not in build mode or no selection
   if (mode !== 'build') return null;
   if (!selectedBrickType || !previewData) return null;
 
-  // Use red for invalid placement, selected color for valid
   const previewColor = previewData.isValid ? selectedColor : '#ff0000';
   const opacity = previewData.isValid ? 0.6 : 0.4;
 
@@ -88,27 +89,47 @@ export const BrickPreview = () => {
       position={[previewData.position[0], previewData.position[1] + height / 2, previewData.position[2]]}
       rotation={[0, rotation * Math.PI / 2, 0]}
     >
-      {/* Main brick body - semi-transparent */}
-      <mesh>
-        <boxGeometry args={[originalWidth, height, originalDepth]} />
-        <meshStandardMaterial
-          color={previewColor}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
-
-      {/* Studs - only for bricks and plates */}
-      {studPositions.map(([x, z], index) => (
-        <mesh
-          key={index}
-          position={[x, height / 2 + STUD_HEIGHT / 2, z]}
-        >
-          <cylinderGeometry args={[STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16]} />
+      {/* Main brick body */}
+      {isSlope && slopeGeometry ? (
+        <mesh geometry={slopeGeometry}>
           <meshStandardMaterial
             color={previewColor}
             transparent
             opacity={opacity}
+            depthWrite={false}
+            flatShading
+          />
+        </mesh>
+      ) : isCornerSlope && cornerSlopeGeometry ? (
+        <mesh geometry={cornerSlopeGeometry}>
+          <meshStandardMaterial
+            color={previewColor}
+            transparent
+            opacity={opacity}
+            depthWrite={false}
+            flatShading
+          />
+        </mesh>
+      ) : (
+        <mesh>
+          <boxGeometry args={[width, height, depth]} />
+          <meshStandardMaterial
+            color={previewColor}
+            transparent
+            opacity={opacity}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+
+      {/* Studs - using shared geometry */}
+      {studPositions.map(([x, z], index) => (
+        <mesh key={index} geometry={studGeometry} position={[x, height / 2 + STUD_HEIGHT / 2, z]}>
+          <meshStandardMaterial
+            color={previewColor}
+            transparent
+            opacity={opacity}
+            depthWrite={false}
           />
         </mesh>
       ))}
