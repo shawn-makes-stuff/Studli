@@ -395,10 +395,10 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       {window.innerWidth >= 640 && (
         <div
           onMouseDown={handleResizeStart}
-          className={`absolute bottom-0 right-0 w-6 h-6 group ${isPinned ? 'pointer-events-none opacity-60' : 'cursor-se-resize'}`}
+          className={`absolute top-0 left-0 w-6 h-6 group ${isPinned ? 'hidden' : 'cursor-nw-resize'}`}
           style={{ touchAction: 'none' }}
         >
-          <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-gray-500 group-hover:border-gray-300 transition-colors" />
+          <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-gray-500 group-hover:border-gray-300 transition-colors" />
         </div>
       )}
     </div>
