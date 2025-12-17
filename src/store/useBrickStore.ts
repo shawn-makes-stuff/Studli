@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { PlacedBrick, BrickType, BRICK_TYPES } from '../types/brick';
 import { rotatePoint } from '../utils/math';
+import { checkBrickCollision } from '../utils/collision';
 
 interface HistoryState {
   placedBricks: PlacedBrick[];
@@ -32,6 +33,7 @@ interface BrickStore {
   contextMenu: ContextMenuState;
   rightClickStart: { x: number; y: number } | null;
   recentBricks: BrickType[];
+  lastPlacedBrickId: string | null;
 
   setSelectedBrickType: (type: BrickType | null) => void;
   addToRecentBricks: (type: BrickType) => void;
@@ -70,6 +72,9 @@ interface BrickStore {
   openContextMenu: (x: number, y: number) => void;
   closeContextMenu: () => void;
   setRightClickStart: (pos: { x: number; y: number } | null) => void;
+
+  nudgeLastPlaced: (dx: number, dz: number) => void;
+  clearLastPlaced: () => void;
 }
 
 const saveToHistory = (state: BrickStore): HistoryState => ({
@@ -94,6 +99,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   contextMenu: { isOpen: false, x: 0, y: 0 },
   rightClickStart: null,
   recentBricks: [],
+  lastPlacedBrickId: null,
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
@@ -168,14 +174,17 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     past: [...state.past, saveToHistory(state)],
     future: [],
     placedBricks: [...state.placedBricks, brick],
-    layerOffset: 0
+    layerOffset: 0,
+    selectedBrickIds: new Set([brick.id]),
+    lastPlacedBrickId: brick.id
   })),
 
   removeBrick: (id) => set((state) => ({
     past: [...state.past, saveToHistory(state)],
     future: [],
     placedBricks: state.placedBricks.filter(b => b.id !== id),
-    selectedBrickIds: new Set([...state.selectedBrickIds].filter(bid => bid !== id))
+    selectedBrickIds: new Set([...state.selectedBrickIds].filter(bid => bid !== id)),
+    lastPlacedBrickId: state.lastPlacedBrickId === id ? null : state.lastPlacedBrickId
   })),
 
   removeBricks: (ids) => set((state) => {
@@ -184,7 +193,8 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
       past: [...state.past, saveToHistory(state)],
       future: [],
       placedBricks: state.placedBricks.filter(b => !idSet.has(b.id)),
-      selectedBrickIds: new Set([...state.selectedBrickIds].filter(bid => !idSet.has(bid)))
+      selectedBrickIds: new Set([...state.selectedBrickIds].filter(bid => !idSet.has(bid))),
+      lastPlacedBrickId: idSet.has(state.lastPlacedBrickId ?? '') ? null : state.lastPlacedBrickId
     };
   }),
 
@@ -202,7 +212,8 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     future: [],
     placedBricks: [],
     selectedBrickIds: new Set(),
-    layerOffset: 0
+    layerOffset: 0,
+    lastPlacedBrickId: null
   })),
 
   selectBrick: (id, addToSelection = false) => set((state) => {
@@ -258,6 +269,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
         future: [],
         placedBricks: [...remainingBricks, ...newBricks],
         selectedBrickIds: new Set(newBricks.map(b => b.id)),
+        lastPlacedBrickId: newBricks[0]?.id ?? null,
         mode: 'select',
         groupRotation: 0,
         pendingGhostBricks: []
@@ -268,6 +280,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
         future: [],
         placedBricks: [...state.placedBricks, ...newBricks],
         selectedBrickIds: new Set(newBricks.map(b => b.id)),
+        lastPlacedBrickId: newBricks[0]?.id ?? null,
         mode: 'select',
         groupRotation: 0,
         pendingGhostBricks: []
@@ -287,7 +300,8 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
       past: state.past.slice(0, -1),
       future: [saveToHistory(state), ...state.future],
       placedBricks: previous.placedBricks,
-      selectedBrickIds: new Set()
+      selectedBrickIds: new Set(),
+      lastPlacedBrickId: null
     };
   }),
 
@@ -298,13 +312,47 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
       past: [...state.past, saveToHistory(state)],
       future: state.future.slice(1),
       placedBricks: next.placedBricks,
-      selectedBrickIds: new Set()
+      selectedBrickIds: new Set(),
+      lastPlacedBrickId: null
     };
   }),
 
   openContextMenu: (x, y) => set({ contextMenu: { isOpen: true, x, y } }),
   closeContextMenu: () => set({ contextMenu: { isOpen: false, x: 0, y: 0 } }),
   setRightClickStart: (pos) => set({ rightClickStart: pos }),
+
+  nudgeLastPlaced: (dx, dz) => set((state) => {
+    if (!state.lastPlacedBrickId) return state;
+    const target = state.placedBricks.find(b => b.id === state.lastPlacedBrickId);
+    if (!target) return { ...state, lastPlacedBrickId: null };
+
+    const newX = target.position[0] + dx;
+    const newZ = target.position[2] + dz;
+    const collides = checkBrickCollision(
+      newX,
+      target.position[1],
+      newZ,
+      target.typeId,
+      target.rotation,
+      state.placedBricks,
+      new Set([target.id])
+    );
+    if (collides) return state;
+
+    const updatedBricks = state.placedBricks.map(b =>
+      b.id === target.id ? { ...b, position: [newX, b.position[1], newZ] as [number, number, number] } : b
+    );
+
+    return {
+      past: [...state.past, saveToHistory(state)],
+      future: [],
+      placedBricks: updatedBricks,
+      selectedBrickIds: new Set([target.id]),
+      lastPlacedBrickId: target.id
+    };
+  }),
+
+  clearLastPlaced: () => set({ lastPlacedBrickId: null })
 }));
 
 // Selector helpers for common combinations
