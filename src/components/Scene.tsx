@@ -156,13 +156,13 @@ export const Scene = () => {
       onPointerDown={(e) => {
         if (e.button === 2) {
           setRightClickStart({ x: e.clientX, y: e.clientY });
-        } else if (e.button === 0 && lastPlacedBrickId) {
+        } else if (e.button === 0 && e.pointerType !== 'touch' && lastPlacedBrickId) {
           clearLastPlaced();
           clearSelection();
         }
       }}
       onPointerMissed={(e) => {
-        if (e.button === 0 && lastPlacedBrickId) {
+        if (e.button === 0 && e.pointerType !== 'touch' && lastPlacedBrickId) {
           clearLastPlaced();
           clearSelection();
         }

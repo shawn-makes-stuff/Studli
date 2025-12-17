@@ -187,7 +187,13 @@ export const Grid = () => {
               skipPlacementRef.current = true;
               clearLastPlaced();
               clearSelection();
+            } else if (e.pointerType === 'touch') {
+              lastTouchPlaceRef.current = performance.now();
             }
+            return;
+          }
+          if (hasSelection && e.pointerType === 'touch') {
+            lastTouchPlaceRef.current = performance.now();
             return;
           }
           if (e.pointerType === 'touch') {
@@ -205,6 +211,7 @@ export const Grid = () => {
           if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
             // On touch, ignore taps when a selection/gizmo is active
             if (lastPlacedBrickId || hasSelection) {
+              lastTouchPlaceRef.current = performance.now();
               touchStartRef.current = null;
               return;
             }
