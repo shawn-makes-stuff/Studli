@@ -4,6 +4,8 @@ import { BrickThumbnail } from './BrickThumbnail';
 import { SearchIcon, CloseIcon } from './Icons';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 interface BrickPickerPopoutProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
   const [isPinned, setIsPinned] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [size, setSize] = useState({ width: 600, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -165,7 +168,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
   const handleDragStart = (e: React.MouseEvent) => {
     // Only allow dragging on desktop
-    if (window.innerWidth < 640) return;
+    if (window.innerWidth < 640 || isPinned) return;
     // Prevent event from propagating to the 3D scene
     e.preventDefault();
     e.stopPropagation();
@@ -186,7 +189,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
   const handleResizeStart = (e: React.MouseEvent) => {
     // Only allow resizing on desktop
-    if (window.innerWidth < 640) return;
+    if (window.innerWidth < 640 || isPinned) return;
     e.stopPropagation();
     e.preventDefault();
     setIsResizing(true);
@@ -223,8 +226,8 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
   const handleBrickSelect = (brick: BrickType) => {
     onBrickSelect(brick);
-    // Only close if not pinned
-    if (!isPinned) {
+    // Only close if not pinned/locked
+    if (!isPinned && !isLocked) {
       onClose();
     }
   };
@@ -244,7 +247,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
               left: currentPosition.x === 0 ? '50%' : `${currentPosition.x}px`,
               top: currentPosition.y === 0 ? '50%' : `${currentPosition.y}px`,
               transform: currentPosition.x === 0 && currentPosition.y === 0 ? 'translate(-50%, -50%)' : 'none',
-              cursor: isDragging ? 'grabbing' : 'auto',
+              cursor: isDragging ? 'grabbing' : isPinned ? 'default' : 'auto',
               transition: isDragging || isResizing ? 'opacity 150ms ease' : undefined
             }
           : {
@@ -255,12 +258,28 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     >
       {/* Header */}
       <div
-        className={`flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0 select-none ${window.innerWidth >= 640 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        className={`flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0 select-none ${window.innerWidth >= 640 && !isPinned ? 'cursor-grab active:cursor-grabbing' : ''}`}
         onMouseDown={handleDragStart}
         style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
       >
         <h3 className="text-white font-semibold select-none">Select Brick</h3>
         <div className="flex items-center gap-2">
+          {window.innerWidth >= 640 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLocked(!isLocked);
+              }}
+              className={`p-1 -m-1 touch-manipulation transition-colors ${isLocked ? 'text-yellow-300 hover:text-yellow-200' : 'text-gray-400 hover:text-white'}`}
+              title={isLocked ? 'Unlock (close after selecting)' : 'Lock (keep open after selecting)'}
+            >
+              {isLocked ? (
+                <LockIcon className="w-5 h-5" />
+              ) : (
+                <LockOpenIcon className="w-5 h-5" />
+              )}
+            </button>
+          )}
           {window.innerWidth >= 640 && (
             <button
               onClick={(e) => {
@@ -394,7 +413,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       {window.innerWidth >= 640 && (
         <div
           onMouseDown={handleResizeStart}
-          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group"
+          className={`absolute bottom-0 right-0 w-6 h-6 group ${isPinned ? 'pointer-events-none opacity-60' : 'cursor-se-resize'}`}
           style={{ touchAction: 'none' }}
         >
           <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-gray-500 group-hover:border-gray-300 transition-colors" />
