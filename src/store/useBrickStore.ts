@@ -35,6 +35,7 @@ interface BrickStore {
   recentBricks: BrickType[];
   lastPlacedBrickId: string | null;
   suppressPlacement: boolean;
+  orbitLocked: boolean;
 
   setSelectedBrickType: (type: BrickType | null) => void;
   addToRecentBricks: (type: BrickType) => void;
@@ -78,6 +79,7 @@ interface BrickStore {
   clearLastPlaced: () => void;
   markSuppressPlacement: () => void;
   consumeSuppressPlacement: () => boolean;
+  setOrbitLocked: (locked: boolean) => void;
 }
 
 const saveToHistory = (state: BrickStore): HistoryState => ({
@@ -104,6 +106,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   recentBricks: [],
   lastPlacedBrickId: null,
   suppressPlacement: false,
+  orbitLocked: false,
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
@@ -366,7 +369,9 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
       return true;
     }
     return false;
-  }
+  },
+
+  setOrbitLocked: (locked) => set({ orbitLocked: locked })
 }));
 
 // Selector helpers for common combinations

@@ -50,6 +50,7 @@ export const Scene = () => {
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
   const clearSelection = useBrickStore((state) => state.clearSelection);
+  const orbitLocked = useBrickStore((state) => state.orbitLocked);
 
   // Keyboard controls
   useEffect(() => {
@@ -197,6 +198,7 @@ export const Scene = () => {
         dampingFactor={0.08}
         panSpeed={0.8}
         zoomSpeed={0.8}
+        enabled={!orbitLocked}
         mouseButtons={{
           LEFT: undefined,
           MIDDLE: 2,

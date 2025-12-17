@@ -34,6 +34,7 @@ export const RefinementWidget = () => {
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const mode = useBrickStore((state) => state.mode);
   const { camera, size } = useThree();
+  const setOrbitLocked = useBrickStore((state) => state.setOrbitLocked);
 
   const dragRef = useRef<{
     axisStep: THREE.Vector3;
@@ -58,6 +59,7 @@ export const RefinementWidget = () => {
     };
     const handleUp = () => {
       dragRef.current = null;
+      setOrbitLocked(false);
     };
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
@@ -99,6 +101,7 @@ export const RefinementWidget = () => {
     const dir2 = dir2Px.clone().normalize();
     const pixelsPerStep = Math.max(10, dir2Px.length() * 0.9);
     dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0, pixelsPerStep };
+    setOrbitLocked(true);
   };
 
   return (
