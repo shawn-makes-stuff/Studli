@@ -24,11 +24,18 @@ const CATEGORIES: Record<CategoryKey, { title: string; variant?: BrickVariant | 
 export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect, anchorRef }: BrickPickerPopoutProps) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
+    } else {
+      // Show loading when opening
+      setIsLoading(true);
+      // Brief delay to render thumbnails
+      const timer = setTimeout(() => setIsLoading(false), 100);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -77,8 +84,8 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   return (
     <div
       ref={popoutRef}
-      className="fixed inset-x-4 bottom-20 sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:mb-2 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-96 flex flex-col"
-      style={{ width: 'calc(100vw - 2rem)', maxWidth: '400px' }}
+      className="fixed inset-x-4 bottom-20 sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:mb-2 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col"
+      style={{ width: 'calc(100vw - 2rem)', maxWidth: '600px' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
@@ -128,33 +135,44 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
       {/* Brick Grid */}
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-          {filteredBricks.map((brick) => (
-            <button
-              key={brick.id}
-              onClick={() => handleBrickSelect(brick)}
-              className={`
-                p-2 rounded-lg border-2 transition-all active:scale-95 touch-manipulation
-                ${currentBrick?.id === brick.id
-                  ? 'border-blue-500 bg-blue-600/20'
-                  : 'border-gray-600 hover:border-gray-400 bg-gray-700/50'
-                }
-              `}
-              title={brick.name}
-            >
-              <div className="aspect-square flex items-center justify-center mb-1">
-                <BrickThumbnail brickType={brick} color={brick.color} size={60} />
-              </div>
-              <div className="text-xs text-gray-300 text-center truncate">
-                {brick.name}
-              </div>
-            </button>
-          ))}
-        </div>
-        {filteredBricks.length === 0 && (
-          <div className="text-center text-gray-500 py-8">
-            No bricks found
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 border-4 border-gray-600 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {filteredBricks.map((brick) => (
+                <button
+                  key={brick.id}
+                  onClick={() => handleBrickSelect(brick)}
+                  className={`
+                    p-2 rounded-lg border-2 transition-all active:scale-95 touch-manipulation
+                    ${currentBrick?.id === brick.id
+                      ? 'border-blue-500 bg-blue-600/20'
+                      : 'border-gray-600 hover:border-gray-400 bg-gray-700/50'
+                    }
+                  `}
+                  title={brick.name}
+                >
+                  <div className="aspect-square flex items-center justify-center mb-1">
+                    <BrickThumbnail brickType={brick} color={brick.color} size={60} />
+                  </div>
+                  <div className="text-xs text-gray-300 text-center truncate">
+                    {brick.name}
+                  </div>
+                </button>
+              ))}
+            </div>
+            {filteredBricks.length === 0 && (
+              <div className="text-center text-gray-500 py-8">
+                No bricks found
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
