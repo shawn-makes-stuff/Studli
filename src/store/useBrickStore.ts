@@ -73,7 +73,7 @@ interface BrickStore {
   closeContextMenu: () => void;
   setRightClickStart: (pos: { x: number; y: number } | null) => void;
 
-  nudgeLastPlaced: (dx: number, dz: number) => void;
+  nudgeLastPlaced: (dx: number, dy: number, dz: number) => void;
   clearLastPlaced: () => void;
 }
 
@@ -321,16 +321,17 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   closeContextMenu: () => set({ contextMenu: { isOpen: false, x: 0, y: 0 } }),
   setRightClickStart: (pos) => set({ rightClickStart: pos }),
 
-  nudgeLastPlaced: (dx, dz) => set((state) => {
+  nudgeLastPlaced: (dx, dy, dz) => set((state) => {
     if (!state.lastPlacedBrickId) return state;
     const target = state.placedBricks.find(b => b.id === state.lastPlacedBrickId);
     if (!target) return { ...state, lastPlacedBrickId: null };
 
     const newX = target.position[0] + dx;
+    const newY = target.position[1] + dy;
     const newZ = target.position[2] + dz;
     const collides = checkBrickCollision(
       newX,
-      target.position[1],
+      newY,
       newZ,
       target.typeId,
       target.rotation,
@@ -340,7 +341,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     if (collides) return state;
 
     const updatedBricks = state.placedBricks.map(b =>
-      b.id === target.id ? { ...b, position: [newX, b.position[1], newZ] as [number, number, number] } : b
+      b.id === target.id ? { ...b, position: [newX, newY, newZ] as [number, number, number] } : b
     );
 
     return {

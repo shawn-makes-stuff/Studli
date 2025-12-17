@@ -7,6 +7,7 @@ import { BrickPreview } from './BrickPreview';
 import { GhostPreview } from './GhostPreview';
 import { useBrickStore } from '../store/useBrickStore';
 import { useEffect } from 'react';
+import { RefinementWidget } from './RefinementWidget';
 
 const BrickLayer = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
@@ -173,6 +174,7 @@ export const Scene = () => {
       <BrickLayer />
       <BrickPreview />
       <GhostPreview />
+      <RefinementWidget />
 
       <OrbitControls
         makeDefault

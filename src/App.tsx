@@ -2,7 +2,6 @@ import { Scene } from './components/Scene';
 import { FloatingToolbar } from './ui/FloatingToolbar';
 import { ContextMenu } from './ui/ContextMenu';
 import { BottomBar } from './ui/BottomBar';
-import { RefinementControls } from './ui/RefinementControls';
 
 function App() {
   return (
@@ -13,7 +12,6 @@ function App() {
       {/* UI Overlays */}
       <FloatingToolbar />
       <ContextMenu />
-      <RefinementControls />
       <BottomBar />
     </div>
   );
