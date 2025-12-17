@@ -27,7 +27,6 @@ export const Grid = () => {
   const setCursorPosition = useBrickStore((state) => state.setCursorPosition);
   const addBrick = useBrickStore((state) => state.addBrick);
   const addToRecentBricks = useBrickStore((state) => state.addToRecentBricks);
-  const clearSelection = useBrickStore((state) => state.clearSelection);
   const openContextMenu = useBrickStore((state) => state.openContextMenu);
   const mode = useBrickStore((state) => state.mode);
   const cancelMoveOrPaste = useBrickStore((state) => state.cancelMoveOrPaste);
