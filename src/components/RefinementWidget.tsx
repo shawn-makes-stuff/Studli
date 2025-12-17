@@ -24,14 +24,16 @@ export const RefinementWidget = () => {
   const padY = brickHeight + 0.6;
   const stepXZ = STUD_SPACING;
   const stepY = brickHeight;
+  const sideOffset = brickType.studsX * STUD_SPACING * 0.5 + 2;
+  const widgetPos: [number, number, number] = [
+    targetBrick.position[0] - sideOffset,
+    targetBrick.position[1] + padY,
+    targetBrick.position[2]
+  ];
 
   return (
-    <Html
-      position={[targetBrick.position[0], targetBrick.position[1] + padY, targetBrick.position[2]]}
-      transform
-      pointerEvents="auto"
-    >
-      <div className="bg-gray-900/90 border border-gray-700 rounded-xl shadow-2xl backdrop-blur-sm p-3 flex gap-3 items-center translate-x-12">
+    <Html position={widgetPos} transform pointerEvents="auto">
+      <div className="bg-gray-900/90 border border-gray-700 rounded-xl shadow-2xl backdrop-blur-sm p-3 flex gap-3 items-center">
         <div className="flex flex-col gap-2 items-center">
           <button
             onClick={() => nudgeLastPlaced(0, 0, -stepXZ)}
