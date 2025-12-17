@@ -80,8 +80,9 @@ export const RefinementWidget = () => {
   const brickHeight = getBrickHeight(brickType.variant);
   const stepXZ = STUD_SPACING;
   const stepY = brickHeight;
-  const scale = Math.max(brickType.studsX, brickType.studsZ) * 0.8 + 0.6;
-  const offset = Math.max(brickType.studsX, brickType.studsZ) * STUD_SPACING * 0.5 + 0.6;
+  const maxStudSpan = Math.max(brickType.studsX, brickType.studsZ);
+  const offset = Math.max(0.9, maxStudSpan * STUD_SPACING * 0.5 + 0.8);
+  const scale = Math.max(0.9, Math.min(1.6, maxStudSpan * 0.55 + 0.65));
 
   const startDrag = (axisVec: THREE.Vector3, stepSize: number) => {
     const center = new THREE.Vector3().copy(targetBrick.position);
