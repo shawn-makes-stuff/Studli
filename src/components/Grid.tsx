@@ -21,6 +21,7 @@ export const Grid = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
   const setCursorPosition = useBrickStore((state) => state.setCursorPosition);
   const addBrick = useBrickStore((state) => state.addBrick);
+  const addToRecentBricks = useBrickStore((state) => state.addToRecentBricks);
   const clearSelection = useBrickStore((state) => state.clearSelection);
   const openContextMenu = useBrickStore((state) => state.openContextMenu);
   const mode = useBrickStore((state) => state.mode);
@@ -113,6 +114,9 @@ export const Grid = () => {
         color: selectedColor,
         rotation: rotation
       });
+
+      // Add to recent bricks
+      addToRecentBricks(selectedBrickType);
     } else if (mode === 'select') {
       // Selection mode - clicking grid clears selection
       clearSelection();

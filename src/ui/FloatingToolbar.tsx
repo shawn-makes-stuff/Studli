@@ -20,20 +20,20 @@ const ConfirmDialog = ({ isOpen, onConfirm, onCancel }: ConfirmDialogProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 shadow-xl border border-gray-600 max-w-sm">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-lg p-6 shadow-xl border border-gray-600 max-w-sm w-full">
         <h3 className="text-lg font-semibold text-white mb-2">Clear Canvas?</h3>
         <p className="text-gray-400 mb-6">This will remove all bricks. This action cannot be undone.</p>
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-500 transition-colors"
+            className="px-6 py-3 rounded-lg bg-gray-600 text-white hover:bg-gray-500 active:bg-gray-700 transition-colors touch-manipulation active:scale-95"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors"
+            className="px-6 py-3 rounded-lg bg-red-600 text-white hover:bg-red-500 active:bg-red-700 transition-colors touch-manipulation active:scale-95"
           >
             Clear All
           </button>
@@ -51,7 +51,26 @@ interface HelpPopoutProps {
 const HelpPopout = ({ isOpen, onClose }: HelpPopoutProps) => {
   if (!isOpen) return null;
 
-  const sections = [
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  const sections = isTouchDevice ? [
+    {
+      title: 'Touch',
+      items: [
+        ['Tap', 'Place / Select'],
+        ['Two Finger Drag', 'Rotate view'],
+        ['Pinch', 'Zoom'],
+      ]
+    },
+    {
+      title: 'Toolbar',
+      items: [
+        ['Rotate Button', 'Rotate brick'],
+        ['Undo Button', 'Undo last action'],
+        ['Clear Button', 'Clear all bricks'],
+      ]
+    }
+  ] : [
     {
       title: 'Mouse',
       items: [
@@ -84,12 +103,12 @@ const HelpPopout = ({ isOpen, onClose }: HelpPopoutProps) => {
 
   return (
     <div
-      className="absolute top-full right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-600 p-4 w-72 z-50"
+      className="absolute top-full right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-600 p-4 w-72 max-h-96 overflow-y-auto z-50"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-white font-semibold">Controls</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
+        <button onClick={onClose} className="text-gray-400 hover:text-white p-2 -m-2 touch-manipulation">✕</button>
       </div>
       <div className="text-sm text-gray-400 space-y-3">
         {sections.map(section => (
@@ -127,17 +146,17 @@ const ToolbarButton = ({
   variant = 'default',
   children
 }: ToolbarButtonProps) => {
-  const baseClasses = 'p-3 rounded-xl shadow-lg transition-all';
+  const baseClasses = 'p-3 sm:p-4 rounded-xl shadow-lg transition-all active:scale-95 touch-manipulation';
 
   const variantClasses = {
     default: disabled
       ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-      : 'bg-gray-700 text-white hover:bg-gray-600',
-    success: 'bg-green-600 text-white hover:bg-green-500',
-    purple: 'bg-purple-600 text-white hover:bg-purple-500',
+      : 'bg-gray-700 text-white hover:bg-gray-600 active:bg-gray-500',
+    success: 'bg-green-600 text-white hover:bg-green-500 active:bg-green-600',
+    purple: 'bg-purple-600 text-white hover:bg-purple-500 active:bg-purple-600',
     danger: disabled
       ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-      : 'bg-gray-700 text-red-400 hover:bg-red-600 hover:text-white'
+      : 'bg-gray-700 text-red-400 hover:bg-red-600 hover:text-white active:bg-red-700 active:text-white'
   };
 
   return (

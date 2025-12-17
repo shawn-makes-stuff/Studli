@@ -31,8 +31,10 @@ interface BrickStore {
   future: HistoryState[];
   contextMenu: ContextMenuState;
   rightClickStart: { x: number; y: number } | null;
+  recentBricks: BrickType[];
 
   setSelectedBrickType: (type: BrickType | null) => void;
+  addToRecentBricks: (type: BrickType) => void;
   setSelectedColor: (color: string) => void;
   setCursorPosition: (position: [number, number] | null) => void;
   setRotation: (rotation: number) => void;
@@ -91,12 +93,19 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   future: [],
   contextMenu: { isOpen: false, x: 0, y: 0 },
   rightClickStart: null,
+  recentBricks: [],
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
     layerOffset: 0,
     mode: type ? 'build' : 'select',
     selectedBrickIds: type ? new Set() : get().selectedBrickIds
+  }),
+
+  addToRecentBricks: (type) => set((state) => {
+    // Remove if already exists, then add to front
+    const filtered = state.recentBricks.filter(b => b.id !== type.id);
+    return { recentBricks: [type, ...filtered].slice(0, 5) };
   }),
 
   setSelectedColor: (color) => set({ selectedColor: color }),

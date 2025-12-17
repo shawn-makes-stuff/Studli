@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { BRICK_TYPES, BrickType, BrickVariant } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
-import { ColorPicker } from './ColorPicker';
 import { BrickThumbnail } from './BrickThumbnail';
 import {
   MenuIcon,
@@ -130,7 +129,8 @@ const filterBricksByCategory = (query: string) => {
 };
 
 export const SidePanel = () => {
-  const [isOpen, setIsOpen] = useState(true);
+  // Close by default on mobile, open on desktop
+  const [isOpen, setIsOpen] = useState(() => window.innerWidth >= 768);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Record<CategoryKey, boolean>>({
     bricks: true,
@@ -182,6 +182,10 @@ export const SidePanel = () => {
 
   const handleBrickClick = (brick: BrickType) => {
     setSelectedBrickType(selectedBrickType?.id === brick.id ? null : brick);
+    // Close panel on mobile when brick is selected
+    if (window.innerWidth < 768 && selectedBrickType?.id !== brick.id) {
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -257,12 +261,6 @@ export const SidePanel = () => {
               onBrickClick={handleBrickClick}
             />
           ))}
-
-          {/* Color Palette */}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase mb-2">Color</h2>
-            <ColorPicker />
-          </div>
 
           {/* Layer Indicator */}
           {layerOffset !== 0 && mode === 'build' && (
