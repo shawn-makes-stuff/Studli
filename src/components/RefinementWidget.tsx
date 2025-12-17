@@ -22,14 +22,8 @@ const Arrow = ({
       const evt = e as THREE.Event & { nativeEvent: PointerEvent };
       evt.stopPropagation();
       evt.nativeEvent.preventDefault();
-      (evt.eventObject as any)?.setPointerCapture?.((evt.nativeEvent as PointerEvent).pointerId);
       markSuppressPlacement();
       onDragStart(evt);
-    }}
-    onPointerUp={(e) => {
-      const evt = e as THREE.Event & { nativeEvent: PointerEvent };
-      evt.stopPropagation();
-      evt.nativeEvent.preventDefault();
     }}
   >
     <mesh>
