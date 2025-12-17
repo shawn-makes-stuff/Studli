@@ -36,6 +36,7 @@ export const Grid = () => {
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const clearSelection = useBrickStore((state) => state.clearSelection);
+  const hasSelection = useBrickStore((state) => state.selectedBrickIds.size > 0);
   const skipPlacementRef = useRef(false);
 
   // Calculate dynamic grid size based on placed bricks
@@ -202,6 +203,11 @@ export const Grid = () => {
         onPointerUp={(e) => {
           e.stopPropagation();
           if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
+            // On touch, ignore taps when a selection/gizmo is active
+            if (lastPlacedBrickId || hasSelection) {
+              touchStartRef.current = null;
+              return;
+            }
             const elapsed = performance.now() - touchStartRef.current.time;
             const dx = e.clientX - touchStartRef.current.x;
             const dy = e.clientY - touchStartRef.current.y;
