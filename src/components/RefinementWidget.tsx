@@ -43,7 +43,7 @@ export const RefinementWidget = () => {
   } | null>(null);
 
   useEffect(() => {
-    const handleMove = (ev: PointerEvent) => {
+  const handleMove = (ev: PointerEvent) => {
       if (!dragRef.current) return;
       const move = new THREE.Vector2(ev.movementX, -ev.movementY);
       const dot = move.dot(dragRef.current.dir2);

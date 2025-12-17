@@ -33,6 +33,7 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const clearSelection = useBrickStore((state) => state.clearSelection);
+  const markSuppressPlacement = useBrickStore((state) => state.markSuppressPlacement);
 
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
@@ -85,6 +86,7 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     clearLastPlaced();
     clearSelection();
+    markSuppressPlacement();
     e.stopPropagation();
   };
 

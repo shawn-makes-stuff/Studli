@@ -34,6 +34,7 @@ interface BrickStore {
   rightClickStart: { x: number; y: number } | null;
   recentBricks: BrickType[];
   lastPlacedBrickId: string | null;
+  suppressPlacement: boolean;
 
   setSelectedBrickType: (type: BrickType | null) => void;
   addToRecentBricks: (type: BrickType) => void;
@@ -75,6 +76,8 @@ interface BrickStore {
 
   nudgeLastPlaced: (dx: number, dy: number, dz: number) => void;
   clearLastPlaced: () => void;
+  markSuppressPlacement: () => void;
+  consumeSuppressPlacement: () => boolean;
 }
 
 const saveToHistory = (state: BrickStore): HistoryState => ({
@@ -100,6 +103,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   rightClickStart: null,
   recentBricks: [],
   lastPlacedBrickId: null,
+  suppressPlacement: false,
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
@@ -353,7 +357,16 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     };
   }),
 
-  clearLastPlaced: () => set({ lastPlacedBrickId: null })
+  clearLastPlaced: () => set({ lastPlacedBrickId: null }),
+  markSuppressPlacement: () => set({ suppressPlacement: true }),
+  consumeSuppressPlacement: () => {
+    const current = get().suppressPlacement;
+    if (current) {
+      set({ suppressPlacement: false });
+      return true;
+    }
+    return false;
+  }
 }));
 
 // Selector helpers for common combinations

@@ -37,6 +37,7 @@ export const Grid = () => {
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const clearSelection = useBrickStore((state) => state.clearSelection);
   const hasSelection = useBrickStore((state) => state.selectedBrickIds.size > 0);
+  const consumeSuppressPlacement = useBrickStore((state) => state.consumeSuppressPlacement);
   const skipPlacementRef = useRef(false);
 
   // Calculate dynamic grid size based on placed bricks
@@ -90,6 +91,7 @@ export const Grid = () => {
   };
 
   const handlePlaceOrAction = (point: THREE.Vector3) => {
+    if (consumeSuppressPlacement()) return;
     if (mode === 'build' && selectedBrickType) {
       if (lastPlacedBrickId || skipPlacementRef.current) {
         skipPlacementRef.current = false;
