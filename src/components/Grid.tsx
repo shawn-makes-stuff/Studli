@@ -10,9 +10,12 @@ const DEFAULT_GRID_SIZE = 32;
 const EDGE_THRESHOLD = 3; // Expand when within 3 cells of edge
 const GRID_COLOR = '#444444';
 const BASE_COLOR = '#2a2a2a';
+const TOUCH_TAP_MAX_DISTANCE = 10;
+const TOUCH_TAP_MAX_TIME = 300;
 
 export const Grid = () => {
   const planeRef = useRef<THREE.Mesh>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number; id: number; moved: boolean } | null>(null);
 
   const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
   const selectedColor = useBrickStore((state) => state.selectedColor);
@@ -66,6 +69,13 @@ export const Grid = () => {
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
+    if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
+      const dx = e.clientX - touchStartRef.current.x;
+      const dy = e.clientY - touchStartRef.current.y;
+      if (Math.hypot(dx, dy) > TOUCH_TAP_MAX_DISTANCE) {
+        touchStartRef.current = { ...touchStartRef.current, moved: true };
+      }
+    }
     setCursorPosition([e.point.x, e.point.z]);
   };
 
@@ -73,16 +83,11 @@ export const Grid = () => {
     setCursorPosition(null);
   };
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-
-    if (e.button !== 0) return; // Only left click
-
+  const handlePlaceOrAction = (point: THREE.Vector3) => {
     if (mode === 'build' && selectedBrickType) {
-      // Build mode - place a brick
       const [snappedX, snappedZ] = snapToGrid(
-        e.point.x,
-        e.point.z,
+        point.x,
+        point.z,
         selectedBrickType.studsX,
         selectedBrickType.studsZ,
         rotation
@@ -104,7 +109,6 @@ export const Grid = () => {
         selectedBrickType.variant === 'corner-slope'
       );
 
-      // Only place brick if position is valid
       if (!result.isValid) return;
 
       addBrick({
@@ -115,15 +119,18 @@ export const Grid = () => {
         rotation: rotation
       });
 
-      // Add to recent bricks
       addToRecentBricks(selectedBrickType);
     } else if (mode === 'select') {
-      // Selection mode - clicking grid clears selection
       clearSelection();
     } else if (mode === 'move' || mode === 'paste') {
-      // Move or Paste mode - use existing cursor position from pointer move
       confirmMoveOrPaste();
     }
+  };
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    if (e.button !== 0) return; // Only left click
+    handlePlaceOrAction(e.point);
   };
 
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {
@@ -156,6 +163,36 @@ export const Grid = () => {
         ref={planeRef}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.05, 0]}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'touch') {
+            touchStartRef.current = {
+              x: e.clientX,
+              y: e.clientY,
+              time: performance.now(),
+              id: e.pointerId,
+              moved: false
+            };
+          }
+        }}
+        onPointerUp={(e) => {
+          if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
+            const elapsed = performance.now() - touchStartRef.current.time;
+            const dx = e.clientX - touchStartRef.current.x;
+            const dy = e.clientY - touchStartRef.current.y;
+            const dist = Math.hypot(dx, dy);
+            const moved = touchStartRef.current.moved || dist > TOUCH_TAP_MAX_DISTANCE;
+            touchStartRef.current = null;
+            if (!moved && elapsed <= TOUCH_TAP_MAX_TIME) {
+              e.stopPropagation();
+              handlePlaceOrAction(e.point);
+              return;
+            }
+          }
+          setCursorPosition([e.point.x, e.point.z]);
+        }}
+        onPointerCancel={() => {
+          touchStartRef.current = null;
+        }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
         onClick={handleClick}

@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
 import { Grid } from './Grid';
 import { Brick } from './Brick';
 import { BrickPreview } from './BrickPreview';
@@ -178,10 +179,18 @@ export const Scene = () => {
         minDistance={5}
         maxDistance={50}
         maxPolarAngle={Math.PI / 2 - 0.1}
+        enableDamping
+        dampingFactor={0.08}
+        panSpeed={0.8}
+        zoomSpeed={0.8}
         mouseButtons={{
           LEFT: undefined,
           MIDDLE: 2,
           RIGHT: 0,
+        }}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,      // one-finger drag to orbit
+          TWO: THREE.TOUCH.DOLLY_PAN,   // two-finger pinch to zoom + pan
         }}
       />
     </Canvas>
