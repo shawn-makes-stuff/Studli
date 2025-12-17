@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { BRICK_TYPES, BrickType, BrickVariant } from '../types/brick';
 import { BrickThumbnail } from './BrickThumbnail';
-import { SearchIcon, CloseIcon } from './Icons';
-import PushPinIcon from '@mui/icons-material/PushPin';
-import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import { SearchIcon, CloseIcon, PinIcon, PinOffIcon } from './Icons';
 
 interface BrickPickerPopoutProps {
   isOpen: boolean;
@@ -271,9 +269,9 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
               title={isPinned ? 'Unpin window' : 'Pin window'}
             >
               {isPinned ? (
-                <PushPinIcon className="w-5 h-5" />
+                <PinIcon className="w-5 h-5" />
               ) : (
-                <PushPinOutlinedIcon className="w-5 h-5" />
+                <PinOffIcon className="w-5 h-5" />
               )}
             </button>
           )}
