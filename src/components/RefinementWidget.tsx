@@ -8,11 +8,13 @@ const Arrow = ({
   position,
   rotation,
   color,
+  onPreDrag,
   onDragStart
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   color: string;
+  onPreDrag: () => void;
   onDragStart: (e: THREE.Event) => void;
 }) => (
   <group
@@ -22,7 +24,7 @@ const Arrow = ({
       const evt = e as THREE.Event & { nativeEvent: PointerEvent };
       evt.stopPropagation();
       evt.nativeEvent.preventDefault();
-      markSuppressPlacement();
+      onPreDrag();
       onDragStart(evt);
     }}
   >
@@ -78,7 +80,7 @@ export const RefinementWidget = () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [nudgeLastPlaced]);
+  }, [nudgeLastPlaced, setOrbitLocked]);
 
   const targetBrick = useMemo(
     () => placedBricks.find((b) => b.id === lastPlacedBrickId),
@@ -114,7 +116,6 @@ export const RefinementWidget = () => {
     const dir2 = dir2Px.clone().normalize();
     const pixelsPerStep = Math.max(10, dir2Px.length() * 0.9);
     dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0, pixelsPerStep };
-    setOrbitLocked(true);
   };
 
   return (
@@ -129,6 +130,7 @@ export const RefinementWidget = () => {
         position={[offset, 0, 0]}
         rotation={[0, 0, -Math.PI / 2]}
         color="#4ade80"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(1, 0, 0), stepXZ)}
       />
       {/* -X */}
@@ -136,6 +138,7 @@ export const RefinementWidget = () => {
         position={[-offset, 0, 0]}
         rotation={[0, 0, Math.PI / 2]}
         color="#f87171"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(-1, 0, 0), stepXZ)}
       />
       {/* +Z */}
@@ -143,6 +146,7 @@ export const RefinementWidget = () => {
         position={[0, 0, offset]}
         rotation={[Math.PI / 2, 0, 0]}
         color="#60a5fa"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(0, 0, 1), stepXZ)}
       />
       {/* -Z */}
@@ -150,6 +154,7 @@ export const RefinementWidget = () => {
         position={[0, 0, -offset]}
         rotation={[-Math.PI / 2, 0, 0]}
         color="#facc15"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(0, 0, -1), stepXZ)}
       />
       {/* +Y */}
@@ -157,6 +162,7 @@ export const RefinementWidget = () => {
         position={[0, offset, 0]}
         rotation={[0, 0, 0]}
         color="#a78bfa"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(0, 1, 0), stepY)}
       />
       {/* -Y */}
@@ -164,6 +170,7 @@ export const RefinementWidget = () => {
         position={[0, -offset, 0]}
         rotation={[Math.PI, 0, 0]}
         color="#38bdf8"
+        onPreDrag={() => { markSuppressPlacement(); setOrbitLocked(true); }}
         onDragStart={() => startDrag(new THREE.Vector3(0, -1, 0), stepY)}
       />
     </group>
