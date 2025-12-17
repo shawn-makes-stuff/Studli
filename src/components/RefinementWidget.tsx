@@ -20,9 +20,6 @@ const Arrow = ({
     rotation={rotation}
     onPointerDown={(e) => {
       const evt = e as THREE.Event & { nativeEvent: PointerEvent };
-      if (evt.nativeEvent.pointerType === 'mouse' && evt.nativeEvent.button !== 0 && evt.nativeEvent.button !== 2) {
-        return;
-      }
       evt.stopPropagation();
       evt.nativeEvent.preventDefault();
       onDragStart(evt);
