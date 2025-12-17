@@ -12,10 +12,12 @@ const GRID_COLOR = '#444444';
 const BASE_COLOR = '#2a2a2a';
 const TOUCH_TAP_MAX_DISTANCE = 10;
 const TOUCH_TAP_MAX_TIME = 300;
+const TOUCH_CLICK_SUPPRESS_WINDOW = 400;
 
 export const Grid = () => {
   const planeRef = useRef<THREE.Mesh>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number; id: number; moved: boolean } | null>(null);
+  const lastTouchPlaceRef = useRef<number>(0);
 
   const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
   const selectedColor = useBrickStore((state) => state.selectedColor);
@@ -129,6 +131,10 @@ export const Grid = () => {
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    // Ignore the synthetic mouse click that follows a touch tap
+    if (performance.now() - lastTouchPlaceRef.current < TOUCH_CLICK_SUPPRESS_WINDOW) {
+      return;
+    }
     if (e.button !== 0) return; // Only left click
     handlePlaceOrAction(e.point);
   };
@@ -164,6 +170,7 @@ export const Grid = () => {
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.05, 0]}
         onPointerDown={(e) => {
+          e.stopPropagation();
           if (e.pointerType === 'touch') {
             touchStartRef.current = {
               x: e.clientX,
@@ -175,6 +182,7 @@ export const Grid = () => {
           }
         }}
         onPointerUp={(e) => {
+          e.stopPropagation();
           if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
             const elapsed = performance.now() - touchStartRef.current.time;
             const dx = e.clientX - touchStartRef.current.x;
@@ -183,8 +191,8 @@ export const Grid = () => {
             const moved = touchStartRef.current.moved || dist > TOUCH_TAP_MAX_DISTANCE;
             touchStartRef.current = null;
             if (!moved && elapsed <= TOUCH_TAP_MAX_TIME) {
-              e.stopPropagation();
               handlePlaceOrAction(e.point);
+              lastTouchPlaceRef.current = performance.now();
               return;
             }
           }
