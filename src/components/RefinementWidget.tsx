@@ -33,12 +33,13 @@ export const RefinementWidget = () => {
   const nudgeLastPlaced = useBrickStore((state) => state.nudgeLastPlaced);
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const mode = useBrickStore((state) => state.mode);
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
   const dragRef = useRef<{
     axisStep: THREE.Vector3;
     dir2: THREE.Vector2;
     accum: number;
+    pixelsPerStep: number;
   } | null>(null);
 
   useEffect(() => {
@@ -48,10 +49,9 @@ export const RefinementWidget = () => {
       const dot = move.dot(dragRef.current.dir2);
       if (dot === 0) return;
       dragRef.current.accum += dot;
-      const PIXELS_PER_STEP = 14;
-      const steps = Math.trunc(dragRef.current.accum / PIXELS_PER_STEP);
+      const steps = Math.trunc(dragRef.current.accum / dragRef.current.pixelsPerStep);
       if (steps !== 0) {
-        dragRef.current.accum -= steps * PIXELS_PER_STEP;
+        dragRef.current.accum -= steps * dragRef.current.pixelsPerStep;
         const delta = dragRef.current.axisStep.clone().multiplyScalar(steps);
         nudgeLastPlaced(delta.x, delta.y, delta.z);
       }
@@ -89,10 +89,15 @@ export const RefinementWidget = () => {
     const end = center.clone().add(axisDir);
     const projCenter = center.clone().project(camera);
     const projEnd = end.clone().project(camera);
-    const dir2 = new THREE.Vector2(projEnd.x - projCenter.x, projEnd.y - projCenter.y);
-    if (dir2.lengthSq() < 1e-6) return;
-    dir2.normalize();
-    dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0 };
+    const dir2Ndc = new THREE.Vector2(projEnd.x - projCenter.x, projEnd.y - projCenter.y);
+    if (dir2Ndc.lengthSq() < 1e-6) return;
+    const dir2Px = new THREE.Vector2(
+      dir2Ndc.x * (size.width / 2),
+      dir2Ndc.y * (size.height / 2)
+    );
+    const dir2 = dir2Px.clone().normalize();
+    const pixelsPerStep = Math.max(10, dir2Px.length() * 0.9);
+    dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0, pixelsPerStep };
   };
 
   return (
