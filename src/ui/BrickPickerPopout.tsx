@@ -30,11 +30,12 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
+      setIsLoading(false);
     } else {
-      // Show loading when opening
+      // Show loading immediately when opening
       setIsLoading(true);
-      // Brief delay to render thumbnails
-      const timer = setTimeout(() => setIsLoading(false), 100);
+      // Wait for thumbnails to render
+      const timer = setTimeout(() => setIsLoading(false), 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -84,7 +85,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   return (
     <div
       ref={popoutRef}
-      className="fixed inset-x-4 bottom-20 sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:mb-2 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col"
+      className="fixed inset-x-4 bottom-20 sm:absolute sm:inset-x-auto sm:bottom-full sm:left-1/2 sm:-translate-x-1/2 sm:mb-4 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col"
       style={{ width: 'calc(100vw - 2rem)', maxWidth: '600px' }}
     >
       {/* Header */}
