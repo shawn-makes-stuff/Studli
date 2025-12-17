@@ -47,6 +47,8 @@ export const Scene = () => {
   const confirmMoveOrPaste = useBrickStore((state) => state.confirmMoveOrPaste);
   const ghostValid = useBrickStore((state) => state.ghostValid);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
+  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
+  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
 
   // Keyboard controls
   useEffect(() => {
@@ -153,6 +155,11 @@ export const Scene = () => {
       onPointerDown={(e) => {
         if (e.button === 2) {
           setRightClickStart({ x: e.clientX, y: e.clientY });
+        }
+      }}
+      onPointerMissed={() => {
+        if (lastPlacedBrickId) {
+          clearLastPlaced();
         }
       }}
       onContextMenu={(e) => e.preventDefault()}

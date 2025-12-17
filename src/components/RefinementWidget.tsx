@@ -1,7 +1,30 @@
-import { Html } from '@react-three/drei';
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
 import { getBrickType, getBrickHeight, STUD_SPACING } from '../types/brick';
+
+const Arrow = ({
+  position,
+  rotation,
+  color,
+  onClick
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  color: string;
+  onClick: (e: THREE.Event) => void;
+}) => (
+  <group position={position} rotation={rotation} onPointerDown={(e) => { e.stopPropagation(); onClick(e); }}>
+    <mesh>
+      <cylinderGeometry args={[0.07, 0.07, 0.7, 8]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.2} />
+    </mesh>
+    <mesh position={[0, 0.45, 0]}>
+      <coneGeometry args={[0.16, 0.25, 12]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.4} />
+    </mesh>
+  </group>
+);
 
 export const RefinementWidget = () => {
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
@@ -21,75 +44,60 @@ export const RefinementWidget = () => {
   if (!brickType) return null;
 
   const brickHeight = getBrickHeight(brickType.variant);
-  const padY = brickHeight + 0.6;
   const stepXZ = STUD_SPACING;
   const stepY = brickHeight;
-  const sideOffset = brickType.studsX * STUD_SPACING * 0.5 + 2;
-  const widgetPos: [number, number, number] = [
-    targetBrick.position[0] - sideOffset,
-    targetBrick.position[1] + padY,
-    targetBrick.position[2]
-  ];
+  const scale = Math.max(brickType.studsX, brickType.studsZ) * 0.8 + 0.6;
+  const offset = Math.max(brickType.studsX, brickType.studsZ) * STUD_SPACING * 0.5 + 0.6;
 
   return (
-    <Html position={widgetPos} transform pointerEvents="auto">
-      <div className="bg-gray-900/90 border border-gray-700 rounded-xl shadow-2xl backdrop-blur-sm p-3 flex gap-3 items-center">
-        <div className="flex flex-col gap-2 items-center">
-          <button
-            onClick={() => nudgeLastPlaced(0, 0, -stepXZ)}
-            className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-            title="Forward"
-          >
-            ↑
-          </button>
-          <div className="flex gap-2">
-            <button
-              onClick={() => nudgeLastPlaced(-stepXZ, 0, 0)}
-              className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-              title="Left"
-            >
-              ←
-            </button>
-            <button
-              onClick={() => clearLastPlaced()}
-              className="w-10 h-10 rounded-lg border-2 border-blue-500 bg-blue-600/80 text-white font-semibold active:scale-95 transition-transform"
-              title="Confirm"
-            >
-              OK
-            </button>
-            <button
-              onClick={() => nudgeLastPlaced(stepXZ, 0, 0)}
-              className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-              title="Right"
-            >
-              →
-            </button>
-          </div>
-          <button
-            onClick={() => nudgeLastPlaced(0, 0, stepXZ)}
-            className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-            title="Back"
-          >
-            ↓
-          </button>
-        </div>
-        <div className="flex flex-col gap-2 items-center">
-          <button
-            onClick={() => nudgeLastPlaced(0, stepY, 0)}
-            className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-            title="Raise"
-          >
-            +Y
-          </button>
-          <button
-            onClick={() => nudgeLastPlaced(0, -stepY, 0)}
-            className="w-10 h-10 rounded-lg border-2 border-gray-600 bg-gray-700/80 text-white font-bold active:scale-95 transition-transform"
-            title="Lower"
-          >
-            -Y
-          </button>
-        </div>
-      </div>
-    </Html>
+    <group position={targetBrick.position} scale={scale}>
+      <mesh>
+        <sphereGeometry args={[0.08, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" emissive="#666" emissiveIntensity={0.3} />
+      </mesh>
+
+      {/* +X */}
+      <Arrow
+        position={[offset, 0, 0]}
+        rotation={[0, 0, -Math.PI / 2]}
+        color="#4ade80"
+        onClick={() => nudgeLastPlaced(stepXZ, 0, 0)}
+      />
+      {/* -X */}
+      <Arrow
+        position={[-offset, 0, 0]}
+        rotation={[0, 0, Math.PI / 2]}
+        color="#f87171"
+        onClick={() => nudgeLastPlaced(-stepXZ, 0, 0)}
+      />
+      {/* +Z */}
+      <Arrow
+        position={[0, 0, offset]}
+        rotation={[Math.PI / 2, 0, 0]}
+        color="#60a5fa"
+        onClick={() => nudgeLastPlaced(0, 0, stepXZ)}
+      />
+      {/* -Z */}
+      <Arrow
+        position={[0, 0, -offset]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        color="#facc15"
+        onClick={() => nudgeLastPlaced(0, 0, -stepXZ)}
+      />
+      {/* +Y */}
+      <Arrow
+        position={[0, offset, 0]}
+        rotation={[0, 0, 0]}
+        color="#a78bfa"
+        onClick={() => nudgeLastPlaced(0, stepY, 0)}
+      />
+      {/* -Y */}
+      <Arrow
+        position={[0, -offset, 0]}
+        rotation={[Math.PI, 0, 0]}
+        color="#38bdf8"
+        onClick={() => nudgeLastPlaced(0, -stepY, 0)}
+      />
+    </group>
   );
 };
