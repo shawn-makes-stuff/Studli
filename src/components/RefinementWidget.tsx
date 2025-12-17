@@ -21,7 +21,7 @@ export const RefinementWidget = () => {
   if (!brickType) return null;
 
   const brickHeight = getBrickHeight(brickType.variant);
-  const padY = brickHeight / 2 + 0.8;
+  const padY = brickHeight + 0.6;
   const stepXZ = STUD_SPACING;
   const stepY = brickHeight;
 
@@ -31,7 +31,7 @@ export const RefinementWidget = () => {
       transform
       pointerEvents="auto"
     >
-      <div className="bg-gray-900/85 border border-gray-700 rounded-xl shadow-2xl backdrop-blur-sm p-3 flex gap-3 items-center">
+      <div className="bg-gray-900/90 border border-gray-700 rounded-xl shadow-2xl backdrop-blur-sm p-3 flex gap-3 items-center translate-x-12">
         <div className="flex flex-col gap-2 items-center">
           <button
             onClick={() => nudgeLastPlaced(0, 0, -stepXZ)}
