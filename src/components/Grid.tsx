@@ -35,6 +35,7 @@ export const Grid = () => {
   const rightClickStart = useBrickStore((state) => state.rightClickStart);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
+  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
 
   // Calculate dynamic grid size based on placed bricks
   const gridSize = useMemo(() => {
@@ -173,6 +174,10 @@ export const Grid = () => {
         position={[0, -0.05, 0]}
         onPointerDown={(e) => {
           e.stopPropagation();
+          if (lastPlacedBrickId) {
+            clearLastPlaced();
+            return;
+          }
           if (e.pointerType === 'touch') {
             touchStartRef.current = {
               x: e.clientX,

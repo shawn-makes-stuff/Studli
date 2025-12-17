@@ -1,20 +1,21 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
 import { getBrickType, getBrickHeight, STUD_SPACING } from '../types/brick';
+import { useThree } from '@react-three/fiber';
 
 const Arrow = ({
   position,
   rotation,
   color,
-  onClick
+  onDragStart
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   color: string;
-  onClick: (e: THREE.Event) => void;
+  onDragStart: (e: THREE.Event) => void;
 }) => (
-  <group position={position} rotation={rotation} onPointerDown={(e) => { e.stopPropagation(); onClick(e); }}>
+  <group position={position} rotation={rotation} onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); onDragStart(e); }}>
     <mesh>
       <cylinderGeometry args={[0.07, 0.07, 0.7, 8]} />
       <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.2} />
@@ -32,6 +33,39 @@ export const RefinementWidget = () => {
   const nudgeLastPlaced = useBrickStore((state) => state.nudgeLastPlaced);
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const mode = useBrickStore((state) => state.mode);
+  const { camera } = useThree();
+
+  const dragRef = useRef<{
+    axisStep: THREE.Vector3;
+    dir2: THREE.Vector2;
+    accum: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleMove = (ev: PointerEvent) => {
+      if (!dragRef.current) return;
+      const move = new THREE.Vector2(ev.movementX, -ev.movementY);
+      const dot = move.dot(dragRef.current.dir2);
+      if (dot === 0) return;
+      dragRef.current.accum += dot;
+      const PIXELS_PER_STEP = 14;
+      const steps = Math.trunc(dragRef.current.accum / PIXELS_PER_STEP);
+      if (steps !== 0) {
+        dragRef.current.accum -= steps * PIXELS_PER_STEP;
+        const delta = dragRef.current.axisStep.clone().multiplyScalar(steps);
+        nudgeLastPlaced(delta.x, delta.y, delta.z);
+      }
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+    };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [nudgeLastPlaced]);
 
   const targetBrick = useMemo(
     () => placedBricks.find((b) => b.id === lastPlacedBrickId),
@@ -49,6 +83,18 @@ export const RefinementWidget = () => {
   const scale = Math.max(brickType.studsX, brickType.studsZ) * 0.8 + 0.6;
   const offset = Math.max(brickType.studsX, brickType.studsZ) * STUD_SPACING * 0.5 + 0.6;
 
+  const startDrag = (axisVec: THREE.Vector3, stepSize: number) => {
+    const center = new THREE.Vector3().copy(targetBrick.position);
+    const axisDir = axisVec.clone().normalize();
+    const end = center.clone().add(axisDir);
+    const projCenter = center.clone().project(camera);
+    const projEnd = end.clone().project(camera);
+    const dir2 = new THREE.Vector2(projEnd.x - projCenter.x, projEnd.y - projCenter.y);
+    if (dir2.lengthSq() < 1e-6) return;
+    dir2.normalize();
+    dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0 };
+  };
+
   return (
     <group position={targetBrick.position} scale={scale}>
       <mesh>
@@ -61,42 +107,42 @@ export const RefinementWidget = () => {
         position={[offset, 0, 0]}
         rotation={[0, 0, -Math.PI / 2]}
         color="#4ade80"
-        onClick={() => nudgeLastPlaced(stepXZ, 0, 0)}
+        onDragStart={() => startDrag(new THREE.Vector3(1, 0, 0), stepXZ)}
       />
       {/* -X */}
       <Arrow
         position={[-offset, 0, 0]}
         rotation={[0, 0, Math.PI / 2]}
         color="#f87171"
-        onClick={() => nudgeLastPlaced(-stepXZ, 0, 0)}
+        onDragStart={() => startDrag(new THREE.Vector3(-1, 0, 0), stepXZ)}
       />
       {/* +Z */}
       <Arrow
         position={[0, 0, offset]}
         rotation={[Math.PI / 2, 0, 0]}
         color="#60a5fa"
-        onClick={() => nudgeLastPlaced(0, 0, stepXZ)}
+        onDragStart={() => startDrag(new THREE.Vector3(0, 0, 1), stepXZ)}
       />
       {/* -Z */}
       <Arrow
         position={[0, 0, -offset]}
         rotation={[-Math.PI / 2, 0, 0]}
         color="#facc15"
-        onClick={() => nudgeLastPlaced(0, 0, -stepXZ)}
+        onDragStart={() => startDrag(new THREE.Vector3(0, 0, -1), stepXZ)}
       />
       {/* +Y */}
       <Arrow
         position={[0, offset, 0]}
         rotation={[0, 0, 0]}
         color="#a78bfa"
-        onClick={() => nudgeLastPlaced(0, stepY, 0)}
+        onDragStart={() => startDrag(new THREE.Vector3(0, 1, 0), stepY)}
       />
       {/* -Y */}
       <Arrow
         position={[0, -offset, 0]}
         rotation={[Math.PI, 0, 0]}
         color="#38bdf8"
-        onClick={() => nudgeLastPlaced(0, -stepY, 0)}
+        onDragStart={() => startDrag(new THREE.Vector3(0, -1, 0), stepY)}
       />
     </group>
   );

@@ -179,7 +179,7 @@ export const Scene = () => {
 
       <Grid />
       <BrickLayer />
-      <BrickPreview />
+      {!lastPlacedBrickId && <BrickPreview />}
       <GhostPreview />
       <RefinementWidget />
 
