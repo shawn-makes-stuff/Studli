@@ -23,7 +23,13 @@ const Arrow = ({
       evt.stopPropagation();
       evt.nativeEvent.preventDefault();
       (evt.eventObject as any)?.setPointerCapture?.((evt.nativeEvent as PointerEvent).pointerId);
+      markSuppressPlacement();
       onDragStart(evt);
+    }}
+    onPointerUp={(e) => {
+      const evt = e as THREE.Event & { nativeEvent: PointerEvent };
+      evt.stopPropagation();
+      evt.nativeEvent.preventDefault();
     }}
   >
     <mesh>
@@ -45,6 +51,7 @@ export const RefinementWidget = () => {
   const mode = useBrickStore((state) => state.mode);
   const { camera, size } = useThree();
   const setOrbitLocked = useBrickStore((state) => state.setOrbitLocked);
+  const markSuppressPlacement = useBrickStore((state) => state.markSuppressPlacement);
 
   const dragRef = useRef<{
     axisStep: THREE.Vector3;
