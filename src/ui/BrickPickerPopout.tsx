@@ -75,6 +75,8 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     const handleClickOutside = (event: MouseEvent) => {
       if (
         isOpen &&
+        !isPinned &&
+        !isLocked &&
         popoutRef.current &&
         !popoutRef.current.contains(event.target as Node) &&
         anchorRef.current &&
@@ -86,7 +88,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose, anchorRef]);
+  }, [isOpen, onClose, anchorRef, isPinned, isLocked]);
 
   // Throttle position/size updates to the next animation frame and apply directly to the element for snappier drag/resize
   const requestFrame = useCallback(() => {
