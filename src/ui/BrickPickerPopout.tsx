@@ -4,8 +4,6 @@ import { BrickThumbnail } from './BrickThumbnail';
 import { SearchIcon, CloseIcon } from './Icons';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
-import LockIcon from '@mui/icons-material/Lock';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 interface BrickPickerPopoutProps {
   isOpen: boolean;
@@ -31,7 +29,6 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
   const [isPinned, setIsPinned] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [size, setSize] = useState({ width: 600, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -76,7 +73,6 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       if (
         isOpen &&
         !isPinned &&
-        !isLocked &&
         popoutRef.current &&
         !popoutRef.current.contains(event.target as Node) &&
         anchorRef.current &&
@@ -88,7 +84,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose, anchorRef, isPinned, isLocked]);
+  }, [isOpen, onClose, anchorRef, isPinned]);
 
   // Throttle position/size updates to the next animation frame and apply directly to the element for snappier drag/resize
   const requestFrame = useCallback(() => {
@@ -228,8 +224,8 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
   const handleBrickSelect = (brick: BrickType) => {
     onBrickSelect(brick);
-    // Only close if not pinned/locked
-    if (!isPinned && !isLocked) {
+    // Only close if not pinned
+    if (!isPinned) {
       onClose();
     }
   };
@@ -266,22 +262,6 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       >
         <h3 className="text-white font-semibold select-none">Select Brick</h3>
         <div className="flex items-center gap-2">
-          {window.innerWidth >= 640 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsLocked(!isLocked);
-              }}
-              className={`p-1 -m-1 touch-manipulation transition-colors ${isLocked ? 'text-yellow-300 hover:text-yellow-200' : 'text-gray-400 hover:text-white'}`}
-              title={isLocked ? 'Unlock (close after selecting)' : 'Lock (keep open after selecting)'}
-            >
-              {isLocked ? (
-                <LockIcon className="w-5 h-5" />
-              ) : (
-                <LockOpenIcon className="w-5 h-5" />
-              )}
-            </button>
-          )}
           {window.innerWidth >= 640 && (
             <button
               onClick={(e) => {
