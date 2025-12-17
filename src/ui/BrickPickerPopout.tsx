@@ -23,13 +23,35 @@ const CATEGORIES: Record<CategoryKey, { title: string; variant?: BrickVariant | 
   slopes: { title: 'Slopes', variant: 'slope' }
 };
 
+const STORAGE_KEY = 'brickPickerPopout';
+
+const loadSavedState = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const pos = parsed?.position ?? {};
+    return {
+      isPinned: Boolean(parsed?.isPinned),
+      position: {
+        x: Number.isFinite(pos.x) ? pos.x : 0,
+        y: Number.isFinite(pos.y) ? pos.y : 0
+      }
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect, anchorRef }: BrickPickerPopoutProps) => {
+  const savedStateRef = useRef(loadSavedState());
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
-  const [isPinned, setIsPinned] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isPinned, setIsPinned] = useState<boolean>(savedStateRef.current?.isPinned ?? false);
+  const [position, setPosition] = useState<{ x: number; y: number }>(savedStateRef.current?.position ?? { x: 0, y: 0 });
   const [size, setSize] = useState({ width: 600, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -49,6 +71,12 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   useEffect(() => {
     liveSizeRef.current = size;
   }, [size]);
+
+  // Persist pin + position
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ isPinned, position }));
+  }, [isPinned, position]);
 
   useEffect(() => {
     if (!isOpen) {
