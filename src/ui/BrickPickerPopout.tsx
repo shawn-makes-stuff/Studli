@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { BRICK_TYPES, BrickType, BrickVariant } from '../types/brick';
 import { BrickThumbnail } from './BrickThumbnail';
 import { SearchIcon, CloseIcon } from './Icons';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 
 interface BrickPickerPopoutProps {
   isOpen: boolean;
@@ -26,7 +28,27 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const [searchQuery, setSearchQuery] = useState('');
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
+  const [isPinned, setIsPinned] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [size, setSize] = useState({ width: 600, height: 600 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
+  const resizeStartRef = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
+  const frameRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const livePositionRef = useRef(position);
+  const liveSizeRef = useRef(size);
+
+  useEffect(() => {
+    livePositionRef.current = position;
+  }, [position]);
+
+  useEffect(() => {
+    liveSizeRef.current = size;
+  }, [size]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,6 +85,124 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose, anchorRef]);
 
+  // Throttle position/size updates to the next animation frame and apply directly to the element for snappier drag/resize
+  const requestFrame = useCallback(() => {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      const el = popoutRef.current;
+      if (el) {
+        if (pendingPositionRef.current) {
+          const { x, y } = pendingPositionRef.current;
+          livePositionRef.current = { x, y };
+          el.style.left = `${x}px`;
+          el.style.top = `${y}px`;
+          el.style.transform = 'translate3d(0, 0, 0)';
+          pendingPositionRef.current = null;
+        }
+        if (pendingSizeRef.current) {
+          const { width, height } = pendingSizeRef.current;
+          liveSizeRef.current = { width, height };
+          el.style.width = `${width}px`;
+          el.style.height = `${height}px`;
+          pendingSizeRef.current = null;
+        }
+      }
+      frameRef.current = null;
+    });
+  }, []);
+
+  // Drag and resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const { mouseX, mouseY, startX, startY } = dragStartRef.current;
+        pendingPositionRef.current = {
+          x: startX + (e.clientX - mouseX),
+          y: startY + (e.clientY - mouseY)
+        };
+        requestFrame();
+      } else if (isResizing) {
+        const { mouseX, mouseY, width, height } = resizeStartRef.current;
+        pendingSizeRef.current = {
+          width: Math.max(400, width + (e.clientX - mouseX)),
+          height: Math.max(400, height + (e.clientY - mouseY))
+        };
+        requestFrame();
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+      const finalPosition = pendingPositionRef.current ?? livePositionRef.current;
+      const finalSize = pendingSizeRef.current ?? liveSizeRef.current;
+      livePositionRef.current = finalPosition;
+      liveSizeRef.current = finalSize;
+      if (pendingPositionRef.current || pendingSizeRef.current) {
+        requestFrame();
+      }
+      // Commit the final position/size back to React state after the drag/resize finishes
+      setPosition(finalPosition);
+      setSize(finalSize);
+    };
+
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, requestFrame]);
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+    }
+  }, []);
+
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    // Only allow dragging on desktop
+    if (window.innerWidth < 640) return;
+    // Prevent event from propagating to the 3D scene
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = popoutRef.current?.getBoundingClientRect();
+    const startX = rect ? rect.left : position.x;
+    const startY = rect ? rect.top : position.y;
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX,
+      startY
+    };
+    // Align immediately so movement tracks the cursor without a frame of lag
+    pendingPositionRef.current = { x: startX, y: startY };
+    requestFrame();
+    setIsDragging(true);
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    // Only allow resizing on desktop
+    if (window.innerWidth < 640) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    const rect = popoutRef.current?.getBoundingClientRect();
+    const width = rect ? rect.width : size.width;
+    const height = rect ? rect.height : size.height;
+    resizeStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      width,
+      height
+    };
+    pendingSizeRef.current = { width, height };
+    requestFrame();
+  };
+
   const filteredBricks = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
 
@@ -83,24 +223,70 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
   const handleBrickSelect = (brick: BrickType) => {
     onBrickSelect(brick);
-    onClose();
+    // Only close if not pinned
+    if (!isPinned) {
+      onClose();
+    }
   };
+
+  const currentPosition = isDragging ? livePositionRef.current : position;
+  const currentSize = isResizing ? liveSizeRef.current : size;
 
   return (
     <div
       ref={popoutRef}
-      className={`fixed inset-x-4 bottom-20 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col transition-all duration-200 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      style={{ width: 'calc(100vw - 2rem)', maxWidth: '600px' }}
+      className={`fixed bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 flex flex-col transition-opacity duration-150 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} ${window.innerWidth >= 640 ? '' : 'inset-x-4 bottom-20 max-h-[70vh]'}`}
+      style={
+        window.innerWidth >= 640
+          ? {
+              width: `${currentSize.width}px`,
+              height: `${currentSize.height}px`,
+              left: currentPosition.x === 0 ? '50%' : `${currentPosition.x}px`,
+              top: currentPosition.y === 0 ? '50%' : `${currentPosition.y}px`,
+              transform: currentPosition.x === 0 && currentPosition.y === 0 ? 'translate(-50%, -50%)' : 'none',
+              cursor: isDragging ? 'grabbing' : 'auto',
+              transition: isDragging || isResizing ? 'opacity 150ms ease' : undefined
+            }
+          : {
+              width: 'calc(100vw - 2rem)',
+              maxWidth: '600px'
+            }
+      }
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
-        <h3 className="text-white font-semibold">Select Brick</h3>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-white p-1 -m-1 touch-manipulation"
-        >
-          <CloseIcon className="w-5 h-5" />
-        </button>
+      <div
+        className={`flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0 select-none ${window.innerWidth >= 640 ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        onMouseDown={handleDragStart}
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+      >
+        <h3 className="text-white font-semibold select-none">Select Brick</h3>
+        <div className="flex items-center gap-2">
+          {window.innerWidth >= 640 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPinned(!isPinned);
+              }}
+              className={`p-1 -m-1 touch-manipulation transition-colors ${isPinned ? 'text-blue-400 hover:text-blue-300' : 'text-gray-400 hover:text-white'}`}
+              title={isPinned ? 'Unpin window' : 'Pin window'}
+            >
+              {isPinned ? (
+                <PushPinIcon className="w-5 h-5" />
+              ) : (
+                <PushPinOutlinedIcon className="w-5 h-5" />
+              )}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="text-gray-400 hover:text-white p-1 -m-1 touch-manipulation"
+          >
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -203,6 +389,17 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
           )}
         </div>
       </div>
+
+      {/* Resize Handle - Desktop only */}
+      {window.innerWidth >= 640 && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group"
+          style={{ touchAction: 'none' }}
+        >
+          <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-gray-500 group-hover:border-gray-300 transition-colors" />
+        </div>
+      )}
     </div>
   );
 };
