@@ -3,17 +3,10 @@ import { useBrickStore } from '../store/useBrickStore';
 import { STUD_SPACING } from '../types/brick';
 
 export const RefinementControls = () => {
-  const {
-    lastPlacedBrickId,
-    placedBricks,
-    nudgeLastPlaced,
-    clearLastPlaced
-  } = useBrickStore((state) => ({
-    lastPlacedBrickId: state.lastPlacedBrickId,
-    placedBricks: state.placedBricks,
-    nudgeLastPlaced: state.nudgeLastPlaced,
-    clearLastPlaced: state.clearLastPlaced
-  }));
+  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
+  const placedBricks = useBrickStore((state) => state.placedBricks);
+  const nudgeLastPlaced = useBrickStore((state) => state.nudgeLastPlaced);
+  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
 
   const targetBrick = useMemo(
     () => placedBricks.find((b) => b.id === lastPlacedBrickId),
