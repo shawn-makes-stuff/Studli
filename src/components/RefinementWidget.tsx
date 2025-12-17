@@ -15,7 +15,19 @@ const Arrow = ({
   color: string;
   onDragStart: (e: THREE.Event) => void;
 }) => (
-  <group position={position} rotation={rotation} onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); onDragStart(e); }}>
+  <group
+    position={position}
+    rotation={rotation}
+    onPointerDown={(e) => {
+      const evt = e as THREE.Event & { nativeEvent: PointerEvent };
+      if (evt.nativeEvent.pointerType === 'mouse' && evt.nativeEvent.button !== 0 && evt.nativeEvent.button !== 2) {
+        return;
+      }
+      evt.stopPropagation();
+      evt.nativeEvent.preventDefault();
+      onDragStart(evt);
+    }}
+  >
     <mesh>
       <cylinderGeometry args={[0.07, 0.07, 0.7, 8]} />
       <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.2} />
@@ -93,11 +105,13 @@ export const RefinementWidget = () => {
     const projCenter = center.clone().project(camera);
     const projEnd = end.clone().project(camera);
     const dir2Ndc = new THREE.Vector2(projEnd.x - projCenter.x, projEnd.y - projCenter.y);
-    if (dir2Ndc.lengthSq() < 1e-6) return;
-    const dir2Px = new THREE.Vector2(
+    let dir2Px = new THREE.Vector2(
       dir2Ndc.x * (size.width / 2),
       dir2Ndc.y * (size.height / 2)
     );
+    if (dir2Px.lengthSq() < 1e-6) {
+      dir2Px = new THREE.Vector2(0, 1); // fallback vertical
+    }
     const dir2 = dir2Px.clone().normalize();
     const pixelsPerStep = Math.max(10, dir2Px.length() * 0.9);
     dragRef.current = { axisStep: axisDir.multiplyScalar(stepSize), dir2, accum: 0, pixelsPerStep };
