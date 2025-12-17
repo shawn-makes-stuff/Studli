@@ -30,6 +30,9 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   const setCursorPosition = useBrickStore((state) => state.setCursorPosition);
   const rightClickStart = useBrickStore((state) => state.rightClickStart);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
+  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
+  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
+  const clearSelection = useBrickStore((state) => state.clearSelection);
 
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
@@ -74,6 +77,16 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
       // Use existing cursor position (from pointer move) - don't update from click point
       // as it may be on a brick surface at a different XZ than the ghost preview
       confirmMoveOrPaste();
+    }
+  };
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (lastPlacedBrickId) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      clearLastPlaced();
+      clearSelection();
+      e.stopPropagation();
+      return;
     }
   };
 
@@ -140,6 +153,7 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
       ref={groupRef}
       position={brick.position}
       rotation={[0, brick.rotation * Math.PI / 2, 0]}
+      onPointerDown={isGhost ? undefined : handlePointerDown}
       onClick={isGhost ? undefined : handleClick}
       onContextMenu={isGhost ? undefined : handleContextMenu}
       onPointerOver={isGhost ? undefined : handlePointerOver}

@@ -177,6 +177,9 @@ export const Grid = () => {
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.05, 0]}
         onPointerDown={(e) => {
+          if (e.pointerType === 'mouse' && e.button === 2) {
+            return; // let orbit/right click pass through
+          }
           e.stopPropagation();
           if (lastPlacedBrickId) {
             skipPlacementRef.current = true;
