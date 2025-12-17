@@ -81,13 +81,11 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   };
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (lastPlacedBrickId) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      clearLastPlaced();
-      clearSelection();
-      e.stopPropagation();
-      return;
-    }
+    if (!lastPlacedBrickId) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    clearLastPlaced();
+    clearSelection();
+    e.stopPropagation();
   };
 
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {

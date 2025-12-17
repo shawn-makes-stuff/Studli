@@ -182,9 +182,11 @@ export const Grid = () => {
           }
           e.stopPropagation();
           if (lastPlacedBrickId) {
-            skipPlacementRef.current = true;
-            clearLastPlaced();
-            clearSelection();
+            if (e.pointerType === 'mouse' && e.button === 0) {
+              skipPlacementRef.current = true;
+              clearLastPlaced();
+              clearSelection();
+            }
             return;
           }
           if (e.pointerType === 'touch') {
