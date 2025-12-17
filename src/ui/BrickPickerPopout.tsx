@@ -24,21 +24,27 @@ const CATEGORIES: Record<CategoryKey, { title: string; variant?: BrickVariant | 
 export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect, anchorRef }: BrickPickerPopoutProps) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [hasBeenOpened, setHasBeenOpened] = useState(false);
+  const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
   const popoutRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
-      setIsLoading(false);
-    } else {
-      // Show loading immediately when opening
-      setIsLoading(true);
-      // Wait for thumbnails to render
-      const timer = setTimeout(() => setIsLoading(false), 300);
-      return () => clearTimeout(timer);
+    } else if (!hasBeenOpened) {
+      // First time opening - render thumbnails and progressively mark as loaded
+      setHasBeenOpened(true);
+      setLoadedBricks(new Set());
+
+      // Progressively mark bricks as loaded with a stagger effect
+      const brickIds = BRICK_TYPES.map(b => b.id);
+      brickIds.forEach((id, index) => {
+        setTimeout(() => {
+          setLoadedBricks(prev => new Set([...prev, id]));
+        }, index * 15); // 15ms stagger per brick
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, hasBeenOpened]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -75,8 +81,6 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     });
   }, [selectedCategory, searchQuery]);
 
-  if (!isOpen) return null;
-
   const handleBrickSelect = (brick: BrickType) => {
     onBrickSelect(brick);
     onClose();
@@ -85,7 +89,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   return (
     <div
       ref={popoutRef}
-      className="fixed inset-x-4 bottom-20 sm:absolute sm:inset-x-auto sm:bottom-full sm:left-1/2 sm:-translate-x-1/2 sm:mb-4 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col"
+      className={`fixed inset-x-4 bottom-20 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 bg-gray-800/98 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-600 z-50 max-h-[70vh] sm:max-h-[600px] flex flex-col transition-all duration-200 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
       style={{ width: 'calc(100vw - 2rem)', maxWidth: '600px' }}
     >
       {/* Header */}
@@ -136,45 +140,68 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
 
       {/* Brick Grid */}
       <div className="flex-1 overflow-y-auto p-3">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 border-4 border-gray-600 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {filteredBricks.map((brick) => (
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {!hasBeenOpened ? (
+            // Initial loading placeholders
+            Array.from({ length: 18 }).map((_, index) => (
+              <div
+                key={`loading-${index}`}
+                className="p-2 rounded-lg border-2 border-gray-600 bg-gray-700/50"
+              >
+                <div className="aspect-square flex items-center justify-center mb-1">
+                  <div className="relative w-8 h-8">
+                    <div className="absolute inset-0 border-2 border-gray-600 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                  </div>
+                </div>
+                <div className="h-4 bg-gray-600 rounded animate-pulse"></div>
+              </div>
+            ))
+          ) : filteredBricks.length > 0 ? (
+            // Show bricks with individual loading states
+            filteredBricks.map((brick) => {
+              const isLoaded = loadedBricks.has(brick.id);
+              return (
                 <button
                   key={brick.id}
                   onClick={() => handleBrickSelect(brick)}
                   className={`
-                    p-2 rounded-lg border-2 transition-all active:scale-95 touch-manipulation
+                    p-2 rounded-lg border-2 transition-all touch-manipulation
                     ${currentBrick?.id === brick.id
                       ? 'border-blue-500 bg-blue-600/20'
                       : 'border-gray-600 hover:border-gray-400 bg-gray-700/50'
                     }
+                    ${isLoaded ? 'active:scale-95' : ''}
                   `}
                   title={brick.name}
+                  disabled={!isLoaded}
                 >
-                  <div className="aspect-square flex items-center justify-center mb-1">
-                    <BrickThumbnail brickType={brick} color={brick.color} size={60} />
+                  <div className="aspect-square flex items-center justify-center mb-1 relative">
+                    {!isLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="relative w-8 h-8">
+                          <div className="absolute inset-0 border-2 border-gray-600 rounded-full"></div>
+                          <div className="absolute inset-0 border-2 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                        </div>
+                      </div>
+                    )}
+                    <div className={isLoaded ? 'opacity-100' : 'opacity-0'}>
+                      <BrickThumbnail brickType={brick} color={brick.color} size={60} />
+                    </div>
                   </div>
                   <div className="text-xs text-gray-300 text-center truncate">
-                    {brick.name}
+                    {isLoaded ? brick.name : <div className="h-4 bg-gray-600 rounded animate-pulse"></div>}
                   </div>
                 </button>
-              ))}
+              );
+            })
+          ) : (
+            // No bricks found
+            <div className="col-span-full text-center text-gray-500 py-8">
+              No bricks found
             </div>
-            {filteredBricks.length === 0 && (
-              <div className="text-center text-gray-500 py-8">
-                No bricks found
-              </div>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
