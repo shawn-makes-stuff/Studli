@@ -6,7 +6,17 @@ import { BrickPickerPopout } from './BrickPickerPopout';
 
 export const BottomBar = () => {
   const [showColorPopout, setShowColorPopout] = useState(false);
-  const [showBrickPicker, setShowBrickPicker] = useState(false);
+  const [showBrickPicker, setShowBrickPicker] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem('brickPickerPopout');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed?.isPinned);
+    } catch {
+      return false;
+    }
+  });
   const colorButtonRef = useRef<HTMLDivElement>(null);
   const brickPickerButtonRef = useRef<HTMLDivElement>(null);
 

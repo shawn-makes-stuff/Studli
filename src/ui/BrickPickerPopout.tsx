@@ -32,11 +32,16 @@ const loadSavedState = () => {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const pos = parsed?.position ?? {};
+    const sz = parsed?.size ?? {};
     return {
       isPinned: Boolean(parsed?.isPinned),
       position: {
         x: Number.isFinite(pos.x) ? pos.x : 0,
         y: Number.isFinite(pos.y) ? pos.y : 0
+      },
+      size: {
+        width: Number.isFinite(sz.width) ? sz.width : 600,
+        height: Number.isFinite(sz.height) ? sz.height : 600
       }
     };
   } catch {
@@ -52,7 +57,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const [loadedBricks, setLoadedBricks] = useState<Set<string>>(new Set());
   const [isPinned, setIsPinned] = useState<boolean>(savedStateRef.current?.isPinned ?? false);
   const [position, setPosition] = useState<{ x: number; y: number }>(savedStateRef.current?.position ?? { x: 0, y: 0 });
-  const [size, setSize] = useState({ width: 600, height: 600 });
+  const [size, setSize] = useState(savedStateRef.current?.size ?? { width: 600, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
@@ -72,11 +77,11 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     liveSizeRef.current = size;
   }, [size]);
 
-  // Persist pin + position
+  // Persist pin + position + size
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ isPinned, position }));
-  }, [isPinned, position]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ isPinned, position, size }));
+  }, [isPinned, position, size]);
 
   useEffect(() => {
     if (!isOpen) {
