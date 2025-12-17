@@ -15,10 +15,9 @@ interface BrickButtonProps {
   brickType: BrickType;
   isSelected: boolean;
   onClick: () => void;
-  previewColor: string;
 }
 
-const BrickButton = ({ brickType, isSelected, onClick, previewColor }: BrickButtonProps) => (
+const BrickButton = ({ brickType, isSelected, onClick }: BrickButtonProps) => (
   <button
     onClick={onClick}
     className={`
@@ -30,7 +29,7 @@ const BrickButton = ({ brickType, isSelected, onClick, previewColor }: BrickButt
     `}
   >
     <div className="flex items-center gap-3">
-      <BrickThumbnail brickType={brickType} color={previewColor} size={40} />
+      <BrickThumbnail brickType={brickType} color={brickType.color} size={40} />
       <div className="min-w-0">
         <div className="font-medium truncate">{brickType.name}</div>
         <div className="text-xs text-gray-400 capitalize">
@@ -49,7 +48,6 @@ interface CategorySectionProps {
   onToggle: () => void;
   selectedBrickType: BrickType | null;
   onBrickClick: (brick: BrickType) => void;
-  previewColor: string;
 }
 
 const CategorySection = ({
@@ -59,8 +57,7 @@ const CategorySection = ({
   isExpanded,
   onToggle,
   selectedBrickType,
-  onBrickClick,
-  previewColor
+  onBrickClick
 }: CategorySectionProps) => (
   <div>
     <button
@@ -86,7 +83,6 @@ const CategorySection = ({
             brickType={brick}
             isSelected={selectedBrickType?.id === brick.id}
             onClick={() => onBrickClick(brick)}
-            previewColor={previewColor}
           />
         ))}
       </div>
@@ -146,7 +142,6 @@ export const SidePanel = () => {
 
   const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
   const setSelectedBrickType = useBrickStore((state) => state.setSelectedBrickType);
-  const selectedColor = useBrickStore((state) => state.selectedColor);
   const layerOffset = useBrickStore((state) => state.layerOffset);
   const resetLayerOffset = useBrickStore((state) => state.resetLayerOffset);
   const selectedBrickIds = useBrickStore((state) => state.selectedBrickIds);
@@ -260,7 +255,6 @@ export const SidePanel = () => {
               onToggle={() => toggleCategory(key)}
               selectedBrickType={selectedBrickType}
               onBrickClick={handleBrickClick}
-              previewColor={selectedColor}
             />
           ))}
 

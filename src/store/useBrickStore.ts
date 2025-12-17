@@ -94,7 +94,6 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
-    selectedColor: type?.color ?? get().selectedColor,
     layerOffset: 0,
     mode: type ? 'build' : 'select',
     selectedBrickIds: type ? new Set() : get().selectedBrickIds
