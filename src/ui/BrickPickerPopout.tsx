@@ -35,7 +35,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const [isResizing, setIsResizing] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
-  const resizeStartRef = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
+  const resizeStartRef = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0, startX: 0, startY: 0 });
   const frameRef = useRef<number | null>(null);
   const pendingPositionRef = useRef<{ x: number; y: number } | null>(null);
   const pendingSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -123,11 +123,15 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
         };
         requestFrame();
       } else if (isResizing) {
-        const { mouseX, mouseY, width, height } = resizeStartRef.current;
-        pendingSizeRef.current = {
-          width: Math.max(400, width + (e.clientX - mouseX)),
-          height: Math.max(400, height + (e.clientY - mouseY))
-        };
+        const { mouseX, mouseY, width, height, startX, startY } = resizeStartRef.current;
+        const deltaX = e.clientX - mouseX;
+        const deltaY = e.clientY - mouseY;
+        const nextWidth = Math.max(400, width - deltaX);
+        const nextHeight = Math.max(400, height - deltaY);
+        const nextX = startX + (width - nextWidth);
+        const nextY = startY + (height - nextHeight);
+        pendingSizeRef.current = { width: nextWidth, height: nextHeight };
+        pendingPositionRef.current = { x: nextX, y: nextY };
         requestFrame();
       }
     };
@@ -194,13 +198,18 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     const rect = popoutRef.current?.getBoundingClientRect();
     const width = rect ? rect.width : size.width;
     const height = rect ? rect.height : size.height;
+    const startX = rect ? rect.left : position.x;
+    const startY = rect ? rect.top : position.y;
     resizeStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
       width,
-      height
+      height,
+      startX,
+      startY
     };
     pendingSizeRef.current = { width, height };
+    pendingPositionRef.current = { x: startX, y: startY };
     requestFrame();
   };
 
@@ -395,7 +404,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       {window.innerWidth >= 640 && (
         <div
           onMouseDown={handleResizeStart}
-          className={`absolute top-0 left-0 w-6 h-6 group ${isPinned ? 'hidden' : 'cursor-nw-resize'}`}
+          className={`absolute top-1 left-1 w-6 h-6 group ${isPinned ? 'hidden' : 'cursor-nw-resize'}`}
           style={{ touchAction: 'none' }}
         >
           <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-gray-500 group-hover:border-gray-300 transition-colors" />
