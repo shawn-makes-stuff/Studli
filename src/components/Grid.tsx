@@ -34,6 +34,7 @@ export const Grid = () => {
   const confirmMoveOrPaste = useBrickStore((state) => state.confirmMoveOrPaste);
   const rightClickStart = useBrickStore((state) => state.rightClickStart);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
+  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
 
   // Calculate dynamic grid size based on placed bricks
   const gridSize = useMemo(() => {
@@ -87,6 +88,7 @@ export const Grid = () => {
 
   const handlePlaceOrAction = (point: THREE.Vector3) => {
     if (mode === 'build' && selectedBrickType) {
+      if (lastPlacedBrickId) return;
       const [snappedX, snappedZ] = snapToGrid(
         point.x,
         point.z,
