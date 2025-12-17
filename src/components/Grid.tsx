@@ -34,7 +34,6 @@ export const Grid = () => {
   const rightClickStart = useBrickStore((state) => state.rightClickStart);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
-  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const clearSelection = useBrickStore((state) => state.clearSelection);
   const hasSelection = useBrickStore((state) => state.selectedBrickIds.size > 0);
   const consumeSuppressPlacement = useBrickStore((state) => state.consumeSuppressPlacement);
@@ -93,10 +92,14 @@ export const Grid = () => {
   const handlePlaceOrAction = (point: THREE.Vector3) => {
     if (consumeSuppressPlacement()) return;
     if (mode === 'build' && selectedBrickType) {
-      if (lastPlacedBrickId || skipPlacementRef.current) {
+      // Read directly from store to get current value (React state may be stale)
+      const storeState = useBrickStore.getState();
+      if (storeState.lastPlacedBrickId || skipPlacementRef.current) {
         skipPlacementRef.current = false;
         return;
       }
+      // Don't place if we just confirmed a placement (prevents double-click issues)
+      if (performance.now() - storeState.lastConfirmTime < 200) return;
       const [snappedX, snappedZ] = snapToGrid(
         point.x,
         point.z,
@@ -185,10 +188,10 @@ export const Grid = () => {
           }
           e.stopPropagation();
           if (lastPlacedBrickId) {
+            // When gizmo is active, suppress placement but don't clear selection
+            // User must click on the brick itself to confirm placement
             if (e.pointerType === 'mouse' && e.button === 0) {
               skipPlacementRef.current = true;
-              clearLastPlaced();
-              clearSelection();
             } else if (e.pointerType === 'touch') {
               lastTouchPlaceRef.current = performance.now();
             }

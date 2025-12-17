@@ -2,6 +2,7 @@ import { useMemo, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { ThreeEvent } from '@react-three/fiber';
 import { Edges } from '@react-three/drei';
+import { v4 as uuidv4 } from 'uuid';
 import {
   STUD_SPACING,
   STUD_HEIGHT,
@@ -11,6 +12,7 @@ import {
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
 import { getCachedSlopeGeometry, getCachedCornerSlopeGeometry, calculateStudPositions, getStudGeometry } from '../utils/geometry';
+import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
 
 interface BrickProps {
   brick: PlacedBrick;
@@ -30,10 +32,16 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   const setCursorPosition = useBrickStore((state) => state.setCursorPosition);
   const rightClickStart = useBrickStore((state) => state.rightClickStart);
   const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
-  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
   const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const clearSelection = useBrickStore((state) => state.clearSelection);
-  const markSuppressPlacement = useBrickStore((state) => state.markSuppressPlacement);
+
+  const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
+  const selectedColor = useBrickStore((state) => state.selectedColor);
+  const rotation = useBrickStore((state) => state.rotation);
+  const layerOffset = useBrickStore((state) => state.layerOffset);
+  const placedBricks = useBrickStore((state) => state.placedBricks);
+  const addBrick = useBrickStore((state) => state.addBrick);
+  const addToRecentBricks = useBrickStore((state) => state.addToRecentBricks);
 
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
@@ -69,7 +77,61 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   }, [brickType.studsX, brickType.studsZ, depth, brickType.variant, isInverted]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    if (mode === 'build') return;
+    if (mode === 'build') {
+      // Check suppress flag directly from store (set by handlePointerDown when confirming)
+      if (useBrickStore.getState().consumeSuppressPlacement()) return;
+
+      // Don't place if gizmo is still active - read directly from store to get current value
+      const storeState = useBrickStore.getState();
+      if (storeState.lastPlacedBrickId) return;
+
+      // Don't place if we just confirmed a placement (prevents double-click issues)
+      if (performance.now() - storeState.lastConfirmTime < 200) return;
+
+      // Place brick on top of clicked brick
+      if (!selectedBrickType) return;
+      e.stopPropagation();
+
+      // Use intersection point for Minecraft-style placement
+      const [snappedX, snappedZ] = snapToGrid(
+        e.point.x,
+        e.point.z,
+        selectedBrickType.studsX,
+        selectedBrickType.studsZ,
+        rotation
+      );
+
+      const newBrickHeight = getBrickHeight(selectedBrickType.variant);
+
+      // Find valid position on top of existing bricks
+      const result = getLayerPosition(
+        snappedX,
+        snappedZ,
+        selectedBrickType.studsX,
+        selectedBrickType.studsZ,
+        rotation,
+        newBrickHeight,
+        placedBricks,
+        layerOffset,
+        selectedBrickType.variant === 'slope',
+        selectedBrickType.isInverted ?? false,
+        selectedBrickType.variant === 'corner-slope'
+      );
+
+      if (!result.isValid) return;
+
+      addBrick({
+        id: uuidv4(),
+        typeId: selectedBrickType.id,
+        position: [snappedX, result.bottomY + newBrickHeight / 2, snappedZ],
+        color: selectedColor,
+        rotation: rotation
+      });
+
+      addToRecentBricks(selectedBrickType);
+      return;
+    }
+
     e.stopPropagation();
 
     if (mode === 'select') {
@@ -82,12 +144,19 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   };
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
-    if (!lastPlacedBrickId) return;
+    const currentLastPlacedId = useBrickStore.getState().lastPlacedBrickId;
+    if (!currentLastPlacedId) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    clearLastPlaced();
-    clearSelection();
-    markSuppressPlacement();
-    e.stopPropagation();
+
+    // When gizmo is active, any brick click should suppress placement
+    useBrickStore.getState().markSuppressPlacement();
+
+    // Only confirm placement when clicking the last placed brick (with gizmo)
+    if (brick.id === currentLastPlacedId) {
+      clearLastPlaced();
+      clearSelection();
+      e.stopPropagation();
+    }
   };
 
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {
@@ -133,9 +202,12 @@ export const Brick = ({ brick, isGhost = false, ghostValid = true }: BrickProps)
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
-    // Update cursor position when hovering over bricks during move/paste mode
-    // This ensures ghosts track correctly even when not over the grid
-    if (mode === 'move' || mode === 'paste') {
+    // Update cursor position when hovering over bricks
+    // Use intersection point for Minecraft-style placement
+    if (mode === 'build' || mode === 'move' || mode === 'paste') {
+      // Stop propagation so the grid doesn't overwrite with its intersection point
+      // (which would be offset due to camera angle when hovering over elevated bricks)
+      e.stopPropagation();
       setCursorPosition([e.point.x, e.point.z]);
     }
   };

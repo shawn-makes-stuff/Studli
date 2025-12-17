@@ -1,0 +1,5 @@
+Move color selector out of menu, and into top toolbar
+Dont rerender brick previews every time we change a color, just place in the correct color
+Make brick previews a random color so its not uniform
+
+Work on mobile UI and tablet UI, including touch controls.

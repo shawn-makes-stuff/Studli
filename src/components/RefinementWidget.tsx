@@ -1,8 +1,8 @@
 import { useMemo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { ThreeEvent, useThree } from '@react-three/fiber';
 import { useBrickStore } from '../store/useBrickStore';
 import { getBrickType, getBrickHeight, STUD_SPACING } from '../types/brick';
-import { useThree } from '@react-three/fiber';
 
 const Arrow = ({
   position,
@@ -15,17 +15,22 @@ const Arrow = ({
   rotation: [number, number, number];
   color: string;
   onPreDrag: () => void;
-  onDragStart: (e: THREE.Event) => void;
+  onDragStart: () => void;
 }) => (
   <group
     position={position}
     rotation={rotation}
-    onPointerDown={(e) => {
-      const evt = e as THREE.Event & { nativeEvent: PointerEvent };
-      evt.stopPropagation();
-      evt.nativeEvent.preventDefault();
+    onPointerDown={(e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      // Stop native event to prevent OrbitControls from capturing right-click
+      e.nativeEvent.stopPropagation();
+      e.nativeEvent.preventDefault();
       onPreDrag();
-      onDragStart(evt);
+      onDragStart();
+    }}
+    onClick={(e: ThreeEvent<MouseEvent>) => {
+      // Consume click event to prevent it from hitting bricks behind
+      e.stopPropagation();
     }}
   >
     <mesh>
@@ -43,11 +48,11 @@ export const RefinementWidget = () => {
   const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
   const placedBricks = useBrickStore((state) => state.placedBricks);
   const nudgeLastPlaced = useBrickStore((state) => state.nudgeLastPlaced);
-  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
   const mode = useBrickStore((state) => state.mode);
   const { camera, size } = useThree();
   const setOrbitLocked = useBrickStore((state) => state.setOrbitLocked);
   const markSuppressPlacement = useBrickStore((state) => state.markSuppressPlacement);
+  const clearLastPlaced = useBrickStore((state) => state.clearLastPlaced);
 
   const dragRef = useRef<{
     axisStep: THREE.Vector3;
@@ -100,7 +105,7 @@ export const RefinementWidget = () => {
   const scale = Math.max(0.9, Math.min(1.6, maxStudSpan * 0.55 + 0.65));
 
   const startDrag = (axisVec: THREE.Vector3, stepSize: number) => {
-    const center = new THREE.Vector3().copy(targetBrick.position);
+    const center = new THREE.Vector3(...targetBrick.position);
     const axisDir = axisVec.clone().normalize();
     const end = center.clone().add(axisDir);
     const projCenter = center.clone().project(camera);
@@ -120,7 +125,16 @@ export const RefinementWidget = () => {
 
   return (
     <group position={targetBrick.position} scale={scale}>
-      <mesh>
+      <mesh
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation();
+          clearLastPlaced();
+        }}
+        onPointerDown={(e: ThreeEvent<PointerEvent>) => {
+          e.stopPropagation();
+          markSuppressPlacement();
+        }}
+      >
         <sphereGeometry args={[0.08, 16, 16]} />
         <meshStandardMaterial color="#ffffff" emissive="#666" emissiveIntensity={0.3} />
       </mesh>

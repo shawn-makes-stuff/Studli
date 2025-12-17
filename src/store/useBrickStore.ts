@@ -35,6 +35,7 @@ interface BrickStore {
   recentBricks: BrickType[];
   lastPlacedBrickId: string | null;
   suppressPlacement: boolean;
+  lastConfirmTime: number;
   orbitLocked: boolean;
 
   setSelectedBrickType: (type: BrickType | null) => void;
@@ -106,13 +107,15 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
   recentBricks: [],
   lastPlacedBrickId: null,
   suppressPlacement: false,
+  lastConfirmTime: 0,
   orbitLocked: false,
 
   setSelectedBrickType: (type) => set({
     selectedBrickType: type,
     layerOffset: 0,
     mode: type ? 'build' : 'select',
-    selectedBrickIds: type ? new Set() : get().selectedBrickIds
+    selectedBrickIds: type ? new Set() : get().selectedBrickIds,
+    lastPlacedBrickId: null  // Confirm any pending placement when changing brick type
   }),
 
   addToRecentBricks: (type) => set((state) => {
@@ -121,7 +124,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     return { recentBricks: [type, ...filtered].slice(0, 5) };
   }),
 
-  setSelectedColor: (color) => set({ selectedColor: color }),
+  setSelectedColor: (color) => set({ selectedColor: color, lastPlacedBrickId: null }),
   setCursorPosition: (position) => set({ cursorPosition: position }),
   setRotation: (rotation) => set({ rotation: rotation % 4 }),
   rotatePreview: () => set((state) => ({ rotation: (state.rotation + 1) % 4 })),
@@ -173,7 +176,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     layerOffset: Math.max(state.layerOffset + delta, -100)
   })),
   resetLayerOffset: () => set({ layerOffset: 0 }),
-  setMode: (mode) => set({ mode, groupRotation: 0 }),
+  setMode: (mode) => set({ mode, groupRotation: 0, lastPlacedBrickId: null }),
   setGhostValid: (valid) => set({ ghostValid: valid }),
   setPendingGhostBricks: (bricks) => set({ pendingGhostBricks: bricks }),
 
@@ -360,7 +363,7 @@ export const useBrickStore = create<BrickStore>((set, get) => ({
     };
   }),
 
-  clearLastPlaced: () => set({ lastPlacedBrickId: null }),
+  clearLastPlaced: () => set({ lastPlacedBrickId: null, lastConfirmTime: performance.now() }),
   markSuppressPlacement: () => set({ suppressPlacement: true }),
   consumeSuppressPlacement: () => {
     const current = get().suppressPlacement;
