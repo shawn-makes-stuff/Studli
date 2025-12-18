@@ -1,0 +1,87 @@
+# Studli Code Map (Build-Only)
+- React 18 + React Three Fiber/Three.js + Zustand + TypeScript + Tailwind (Vite).
+- Current scope: build-only placement workflow (no edit/select/move/paste), brick variants (brick/plate/tile/slope/corner-slope + inverted), snap-to-grid stacking rules, undo/redo, rotate preview, default-color mode, desktop pointer-lock camera, desktop wheel zoom, touch pinch zoom, mobile dual joysticks + ascend/descend buttons, phone portrait landscape lock screen.
+
+# Entry Points
+- `src/main.tsx` mounts `App` with global styles from `src/index.css`.
+- `src/App.tsx` renders the 3D `Scene` plus overlays (`Crosshair`, `BottomBar`). On touch devices, it shows `VirtualJoystick` + `VirtualJoystickCamera`. On very small screens (phones), it blocks portrait orientation with `src/ui/LandscapeRequiredOverlay.tsx`.
+- `index.html` uses `viewport-fit=cover` so iPhones in landscape use the full width.
+
+# State (`src/store/useBrickStore.ts`)
+- Core state:
+  - `placedBricks`: placed bricks in the scene.
+  - `selectedBrickType`: currently selected brick type to place.
+  - `selectedColor`: last chosen explicit color (used when `useDefaultColor === false`).
+  - `useDefaultColor`: when true, placement/preview uses `selectedBrickType.color`.
+  - `rotation`: preview rotation in quarter-turn steps (0–3).
+  - `layerOffset`: offset used by `getLayerPosition` when multiple valid stack layers exist (currently kept but not exposed via UI).
+  - `recentBricks`: last-used brick types for quick re-selection.
+  - `raycastHit`: center-screen raycast result (`position`, `normal`, optional `hitBrick`, `hitGround`, `isTopFace`).
+  - Mobile inputs:
+    - `virtualJoystickInput` (move)
+    - `virtualJoystickCamera` (look)
+    - `virtualAscend` / `virtualDescend` (vertical move)
+  - History: `past`/`future` store snapshots of `{ placedBricks }` for undo/redo.
+- Actions:
+  - Selection: `setSelectedBrickType`, `setSelectedColor` (also disables default), `setUseDefaultColor`, `rotatePreview`.
+  - Placement: `addBrick` (pushes `past`, clears `future`, resets `layerOffset`).
+  - History: `undo`, `redo`.
+  - Inputs: `setRaycastHit`, `setVirtualJoystickInput`, `setVirtualJoystickCamera`, `setVirtualAscend`, `setVirtualDescend`.
+
+# Scene & Controls
+- `src/components/Scene.tsx`:
+  - Sets up `<Canvas>`, lights, and renders `Grid`, placed `Brick`s, `BrickPreview`, and `FirstPersonControls`.
+  - Keyboard shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Y` redo, `R` rotate preview.
+- `src/components/FirstPersonControls.tsx`:
+  - Desktop:
+    - Movement: WASD + Space/Ctrl; hold Shift for faster movement.
+    - Pointer lock toggle: Esc (press to unlock when locked; press+release to lock when unlocked).
+    - Mouse look: updates camera rotation while pointer-locked.
+    - Zoom: mouse wheel adjusts camera FOV.
+    - Placement: listens for `mousedown` on the canvas while pointer-locked; uses the center `raycastHit` + `snapToGrid` + `getLayerPosition`, then calls `addBrick` + `addToRecentBricks`.
+  - Mobile:
+    - Movement: `virtualJoystickInput` (left joystick) + `virtualAscend` / `virtualDescend` buttons.
+    - Look: `virtualJoystickCamera` (right joystick), with sensitivity scaled down on very small screens.
+    - Zoom: pinch gesture adjusts camera FOV.
+  - Collision: prevents camera capsule from entering brick bounds via `utils/collision.getBrickBounds`.
+  - Raycast: performs a center-screen raycast every frame (`raycaster.intersectObjects(scene.children, true)`), ignoring:
+    - preview meshes (`userData.ignoreRaycast`)
+    - stud meshes (`userData.isStud`)
+    - helpers/lines
+    It also clamps hits that land near a brick’s top edge back inside the brick footprint to reduce jitter.
+
+# Placement, Snapping, Stacking
+- `src/components/Grid.tsx`:
+  - Ground plane used for touch tap placement (short tap = place). Mouse clicks on the canvas are ignored when not pointer-locked.
+  - Grows grid size dynamically based on placed brick extents.
+  - Placement uses `raycastHit` + `snapToGrid` + `getLayerPosition`.
+- `src/components/BrickPreview.tsx`:
+  - Ghost preview aligned to the snapped placement location; turns red when invalid.
+  - Uses default-color mode when `useDefaultColor === true`.
+  - Sets `userData.ignoreRaycast` so the preview doesn’t interfere with targeting.
+- `src/utils/snapToGrid.ts`:
+  - `snapToGrid` handles XZ snapping based on brick footprint + rotation.
+  - `getLayerPosition` finds a valid stacking layer based on collisions and connector rules; slope/inverted/corner-slope footprints are handled here.
+- `src/utils/collision.ts`: AABB helpers and brick bounds (`getBrickBounds`) used by camera collision and placement validation.
+- `src/utils/math.ts`: 90° rotation helpers and overlap utilities.
+
+# Rendering Bricks
+- `src/components/Brick.tsx` renders a placed brick as:
+  - a box, or cached slope/corner-slope geometry from `src/utils/geometry.ts`
+  - plus stud meshes (flagged with `userData.isStud` for raycast filtering)
+  - and a group-level `userData.placedBrick` for hit attribution.
+- `src/utils/geometry.ts`: shared stud geometry, stud position calculation, and cached slope/corner-slope geometries.
+
+# UI Overlays
+- `src/ui/BottomBar.tsx`:
+  - Brick picker (`BrickPickerPopout`) + color picker (`ColorPopout`) + recent bricks.
+  - Build actions: Rotate (`RotateRightIcon`) and Undo (`UndoIcon`).
+  - Exits pointer lock when opening UI elements so clicks work normally.
+- `src/ui/ColorPopout.tsx`:
+  - First color option is Default (`*`) which enables default-color mode (uses `selectedBrickType.color`).
+- `src/ui/Crosshair.tsx`: always-on center reticle.
+- `src/ui/LandscapeRequiredOverlay.tsx`: shown on phones in portrait; blocks play until rotated to landscape.
+- Mobile:
+  - `src/ui/VirtualJoystick.tsx`: movement joystick + Ascend button.
+  - `src/ui/VirtualJoystickCamera.tsx`: camera joystick + Descend button.
+  - Both joysticks support multi-touch so they can be used simultaneously.

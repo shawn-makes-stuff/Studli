@@ -1,4 +1,5 @@
 import { STUD_SPACING, getBrickType, getBrickHeight, PlacedBrick, hasStuds } from '../types/brick';
+import { rotatePoint } from './math';
 
 /**
  * Gets the effective dimensions considering rotation (for collision/snapping)
@@ -71,23 +72,47 @@ const getStudFootprint = (
   isInverted: boolean = false,
   isCornerSlope: boolean = false
 ): { minX: number; maxX: number; minZ: number; maxZ: number } => {
+  const rotateFootprint = (footprint: { minX: number; maxX: number; minZ: number; maxZ: number }) => {
+    const corners: [number, number][] = [
+      [footprint.minX, footprint.minZ],
+      [footprint.minX, footprint.maxZ],
+      [footprint.maxX, footprint.minZ],
+      [footprint.maxX, footprint.maxZ]
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const [x, z] of corners) {
+      const [rx, rz] = rotatePoint(x, z, rotation);
+      minX = Math.min(minX, rx);
+      maxX = Math.max(maxX, rx);
+      minZ = Math.min(minZ, rz);
+      maxZ = Math.max(maxZ, rz);
+    }
+
+    return { minX, maxX, minZ, maxZ };
+  };
+
   if (isCornerSlope && !isInverted) {
     // Regular corner slopes have a 1x1 stud area at the back-left corner
-    const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
-    const halfX = (effectiveX * STUD_SPACING) / 2;
-    const halfZ = (effectiveZ * STUD_SPACING) / 2;
+    const halfX = (studsX * STUD_SPACING) / 2;
+    const halfZ = (studsZ * STUD_SPACING) / 2;
 
-    // 1x1 cell at back-left corner (considering rotation)
-    const studXMin = centerX - halfX;
-    const studXMax = studXMin + STUD_SPACING;
-    const studZMin = centerZ - halfZ;
-    const studZMax = studZMin + STUD_SPACING;
+    const local = rotateFootprint({
+      minX: -halfX,
+      maxX: -halfX + STUD_SPACING,
+      minZ: -halfZ,
+      maxZ: -halfZ + STUD_SPACING
+    });
 
     return {
-      minX: studXMin,
-      maxX: studXMax,
-      minZ: studZMin,
-      maxZ: studZMax
+      minX: centerX + local.minX,
+      maxX: centerX + local.maxX,
+      minZ: centerZ + local.minZ,
+      maxZ: centerZ + local.maxZ
     };
   }
 
@@ -101,35 +126,24 @@ const getStudFootprint = (
     return getBrickFootprint(centerX, centerZ, studsX, studsZ, rotation);
   }
 
-  // For regular slopes, only the first cell (back edge) has studs
-  // Calculate based on rotation
-  const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
-  const halfX = (effectiveX * STUD_SPACING) / 2;
-  const halfZ = (effectiveZ * STUD_SPACING) / 2;
+  // For regular slopes, only the back 1-stud row has studs.
+  // Calculate this in local (rotation 0) space and rotate the footprint.
+  const halfX = (studsX * STUD_SPACING) / 2;
+  const halfZ = (studsZ * STUD_SPACING) / 2;
 
-  // The stud section is always one cell deep from the "back" edge
-  // Rotation 0/2: back is -Z, rotation 1/3: back is -X or +X
-  if (rotation % 2 === 0) {
-    // Rotation 0 or 2: studs are at back Z edge
-    const studZMin = centerZ - halfZ;
-    const studZMax = studZMin + STUD_SPACING;
-    return {
-      minX: centerX - halfX,
-      maxX: centerX + halfX,
-      minZ: studZMin,
-      maxZ: studZMax
-    };
-  } else {
-    // Rotation 1 or 3: studs are at back X edge
-    const studXMin = centerX - halfX;
-    const studXMax = studXMin + STUD_SPACING;
-    return {
-      minX: studXMin,
-      maxX: studXMax,
-      minZ: centerZ - halfZ,
-      maxZ: centerZ + halfZ
-    };
-  }
+  const local = rotateFootprint({
+    minX: -halfX,
+    maxX: halfX,
+    minZ: -halfZ,
+    maxZ: -halfZ + STUD_SPACING
+  });
+
+  return {
+    minX: centerX + local.minX,
+    maxX: centerX + local.maxX,
+    minZ: centerZ + local.minZ,
+    maxZ: centerZ + local.maxZ
+  };
 };
 
 /**
@@ -148,22 +162,47 @@ const getBottomConnectionFootprint = (
   isInverted: boolean = false,
   isCornerSlope: boolean = false
 ): { minX: number; maxX: number; minZ: number; maxZ: number } => {
+  const rotateFootprint = (footprint: { minX: number; maxX: number; minZ: number; maxZ: number }) => {
+    const corners: [number, number][] = [
+      [footprint.minX, footprint.minZ],
+      [footprint.minX, footprint.maxZ],
+      [footprint.maxX, footprint.minZ],
+      [footprint.maxX, footprint.maxZ]
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const [x, z] of corners) {
+      const [rx, rz] = rotatePoint(x, z, rotation);
+      minX = Math.min(minX, rx);
+      maxX = Math.max(maxX, rx);
+      minZ = Math.min(minZ, rz);
+      maxZ = Math.max(maxZ, rz);
+    }
+
+    return { minX, maxX, minZ, maxZ };
+  };
+
   if (isCornerSlope && isInverted) {
     // Inverted corner slopes: 1x1 connection area at back-left corner
-    const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
-    const halfX = (effectiveX * STUD_SPACING) / 2;
-    const halfZ = (effectiveZ * STUD_SPACING) / 2;
+    const halfX = (studsX * STUD_SPACING) / 2;
+    const halfZ = (studsZ * STUD_SPACING) / 2;
 
-    const connXMin = centerX - halfX;
-    const connXMax = connXMin + STUD_SPACING;
-    const connZMin = centerZ - halfZ;
-    const connZMax = connZMin + STUD_SPACING;
+    const local = rotateFootprint({
+      minX: -halfX,
+      maxX: -halfX + STUD_SPACING,
+      minZ: -halfZ,
+      maxZ: -halfZ + STUD_SPACING
+    });
 
     return {
-      minX: connXMin,
-      maxX: connXMax,
-      minZ: connZMin,
-      maxZ: connZMax
+      minX: centerX + local.minX,
+      maxX: centerX + local.maxX,
+      minZ: centerZ + local.minZ,
+      maxZ: centerZ + local.maxZ
     };
   }
 
@@ -172,33 +211,24 @@ const getBottomConnectionFootprint = (
     return getBrickFootprint(centerX, centerZ, studsX, studsZ, rotation);
   }
 
-  // For inverted slopes, only the back 1-stud section can connect from below
-  // (same pattern as where regular slopes have studs)
-  const [effectiveX, effectiveZ] = getRotatedDimensions(studsX, studsZ, rotation);
-  const halfX = (effectiveX * STUD_SPACING) / 2;
-  const halfZ = (effectiveZ * STUD_SPACING) / 2;
+  // For inverted slopes, only the back 1-stud row can connect from below.
+  // Calculate this in local (rotation 0) space and rotate the footprint.
+  const halfX = (studsX * STUD_SPACING) / 2;
+  const halfZ = (studsZ * STUD_SPACING) / 2;
 
-  if (rotation % 2 === 0) {
-    // Rotation 0 or 2: connection area is at back Z edge
-    const connZMin = centerZ - halfZ;
-    const connZMax = connZMin + STUD_SPACING;
-    return {
-      minX: centerX - halfX,
-      maxX: centerX + halfX,
-      minZ: connZMin,
-      maxZ: connZMax
-    };
-  } else {
-    // Rotation 1 or 3: connection area is at back X edge
-    const connXMin = centerX - halfX;
-    const connXMax = connXMin + STUD_SPACING;
-    return {
-      minX: connXMin,
-      maxX: connXMax,
-      minZ: centerZ - halfZ,
-      maxZ: centerZ + halfZ
-    };
-  }
+  const local = rotateFootprint({
+    minX: -halfX,
+    maxX: halfX,
+    minZ: -halfZ,
+    maxZ: -halfZ + STUD_SPACING
+  });
+
+  return {
+    minX: centerX + local.minX,
+    maxX: centerX + local.maxX,
+    minZ: centerZ + local.minZ,
+    maxZ: centerZ + local.maxZ
+  };
 };
 
 /**

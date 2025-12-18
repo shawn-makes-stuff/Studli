@@ -12,32 +12,20 @@ const GRID_COLOR = '#444444';
 const BASE_COLOR = '#2a2a2a';
 const TOUCH_TAP_MAX_DISTANCE = 10;
 const TOUCH_TAP_MAX_TIME = 300;
-const TOUCH_CLICK_SUPPRESS_WINDOW = 400;
 
 export const Grid = () => {
   const planeRef = useRef<THREE.Mesh>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number; id: number; moved: boolean } | null>(null);
-  const lastTouchPlaceRef = useRef<number>(0);
 
   const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
   const selectedColor = useBrickStore((state) => state.selectedColor);
+  const useDefaultColor = useBrickStore((state) => state.useDefaultColor);
   const rotation = useBrickStore((state) => state.rotation);
   const layerOffset = useBrickStore((state) => state.layerOffset);
   const placedBricks = useBrickStore((state) => state.placedBricks);
-  const setCursorPosition = useBrickStore((state) => state.setCursorPosition);
+  const raycastHit = useBrickStore((state) => state.raycastHit);
   const addBrick = useBrickStore((state) => state.addBrick);
   const addToRecentBricks = useBrickStore((state) => state.addToRecentBricks);
-  const openContextMenu = useBrickStore((state) => state.openContextMenu);
-  const mode = useBrickStore((state) => state.mode);
-  const cancelMoveOrPaste = useBrickStore((state) => state.cancelMoveOrPaste);
-  const confirmMoveOrPaste = useBrickStore((state) => state.confirmMoveOrPaste);
-  const rightClickStart = useBrickStore((state) => state.rightClickStart);
-  const setRightClickStart = useBrickStore((state) => state.setRightClickStart);
-  const lastPlacedBrickId = useBrickStore((state) => state.lastPlacedBrickId);
-  const clearSelection = useBrickStore((state) => state.clearSelection);
-  const hasSelection = useBrickStore((state) => state.selectedBrickIds.size > 0);
-  const consumeSuppressPlacement = useBrickStore((state) => state.consumeSuppressPlacement);
-  const skipPlacementRef = useRef(false);
 
   // Calculate dynamic grid size based on placed bricks
   const gridSize = useMemo(() => {
@@ -73,36 +61,22 @@ export const Grid = () => {
     return size;
   }, [placedBricks]);
 
-  const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
-    if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
-      const dx = e.clientX - touchStartRef.current.x;
-      const dy = e.clientY - touchStartRef.current.y;
-      if (Math.hypot(dx, dy) > TOUCH_TAP_MAX_DISTANCE) {
-        touchStartRef.current = { ...touchStartRef.current, moved: true };
-      }
-    }
-    setCursorPosition([e.point.x, e.point.z]);
-  };
+  const handlePlace = () => {
+    if (selectedBrickType && raycastHit) {
+      const effectiveColor = useDefaultColor ? selectedBrickType.color : selectedColor;
+      let targetX = raycastHit.position[0];
+      let targetZ = raycastHit.position[2];
 
-  const handlePointerLeave = () => {
-    setCursorPosition(null);
-  };
-
-  const handlePlaceOrAction = (point: THREE.Vector3) => {
-    if (consumeSuppressPlacement()) return;
-    if (mode === 'build' && selectedBrickType) {
-      // Read directly from store to get current value (React state may be stale)
-      const storeState = useBrickStore.getState();
-      if (storeState.lastPlacedBrickId || skipPlacementRef.current) {
-        skipPlacementRef.current = false;
-        return;
+      // If hitting a side face, offset the placement position
+      if (raycastHit.isTopFace === false && !raycastHit.hitGround) {
+        const offsetDistance = STUD_SPACING / 2;
+        targetX += raycastHit.normal[0] * offsetDistance;
+        targetZ += raycastHit.normal[2] * offsetDistance;
       }
-      // Don't place if we just confirmed a placement (prevents double-click issues)
-      if (performance.now() - storeState.lastConfirmTime < 200) return;
+
       const [snappedX, snappedZ] = snapToGrid(
-        point.x,
-        point.z,
+        targetX,
+        targetZ,
         selectedBrickType.studsX,
         selectedBrickType.studsZ,
         rotation
@@ -130,50 +104,17 @@ export const Grid = () => {
         id: uuidv4(),
         typeId: selectedBrickType.id,
         position: [snappedX, result.bottomY + height / 2, snappedZ],
-        color: selectedColor,
+        color: effectiveColor,
         rotation: rotation
       });
 
       addToRecentBricks(selectedBrickType);
-    } else if (mode === 'select') {
-      clearSelection();
-    } else if (mode === 'move' || mode === 'paste') {
-      confirmMoveOrPaste();
     }
-  };
-
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-    // Ignore the synthetic mouse click that follows a touch tap
-    if (performance.now() - lastTouchPlaceRef.current < TOUCH_CLICK_SUPPRESS_WINDOW) {
-      return;
-    }
-    if (e.button !== 0) return; // Only left click
-    handlePlaceOrAction(e.point);
   };
 
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     e.nativeEvent.preventDefault();
-
-    // Check if mouse moved significantly (user was orbiting)
-    const MOVE_THRESHOLD = 5;
-    if (rightClickStart) {
-      const dx = e.nativeEvent.clientX - rightClickStart.x;
-      const dy = e.nativeEvent.clientY - rightClickStart.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      setRightClickStart(null);
-
-      if (distance > MOVE_THRESHOLD) {
-        return;
-      }
-    }
-
-    if (mode === 'select') {
-      openContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY);
-    } else if (mode === 'move' || mode === 'paste') {
-      cancelMoveOrPaste();
-    }
   };
 
   return (
@@ -182,25 +123,12 @@ export const Grid = () => {
         ref={planeRef}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.05, 0]}
+        name="grid"
         onPointerDown={(e) => {
           if (e.pointerType === 'mouse' && e.button === 2) {
-            return; // let orbit/right click pass through
+            return; // let right click pass through
           }
           e.stopPropagation();
-          if (lastPlacedBrickId) {
-            // When gizmo is active, suppress placement but don't clear selection
-            // User must click on the brick itself to confirm placement
-            if (e.pointerType === 'mouse' && e.button === 0) {
-              skipPlacementRef.current = true;
-            } else if (e.pointerType === 'touch') {
-              lastTouchPlaceRef.current = performance.now();
-            }
-            return;
-          }
-          if (hasSelection && e.pointerType === 'touch') {
-            lastTouchPlaceRef.current = performance.now();
-            return;
-          }
           if (e.pointerType === 'touch') {
             touchStartRef.current = {
               x: e.clientX,
@@ -214,12 +142,6 @@ export const Grid = () => {
         onPointerUp={(e) => {
           e.stopPropagation();
           if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
-            // On touch, ignore taps when a selection/gizmo is active
-            if (lastPlacedBrickId || hasSelection) {
-              lastTouchPlaceRef.current = performance.now();
-              touchStartRef.current = null;
-              return;
-            }
             const elapsed = performance.now() - touchStartRef.current.time;
             const dx = e.clientX - touchStartRef.current.x;
             const dy = e.clientY - touchStartRef.current.y;
@@ -227,19 +149,23 @@ export const Grid = () => {
             const moved = touchStartRef.current.moved || dist > TOUCH_TAP_MAX_DISTANCE;
             touchStartRef.current = null;
             if (!moved && elapsed <= TOUCH_TAP_MAX_TIME) {
-              handlePlaceOrAction(e.point);
-              lastTouchPlaceRef.current = performance.now();
+              handlePlace();
               return;
             }
           }
-          setCursorPosition([e.point.x, e.point.z]);
+        }}
+        onPointerMove={(e) => {
+          if (e.pointerType === 'touch' && touchStartRef.current && touchStartRef.current.id === e.pointerId) {
+            const dx = e.clientX - touchStartRef.current.x;
+            const dy = e.clientY - touchStartRef.current.y;
+            if (Math.hypot(dx, dy) > TOUCH_TAP_MAX_DISTANCE) {
+              touchStartRef.current = { ...touchStartRef.current, moved: true };
+            }
+          }
         }}
         onPointerCancel={() => {
           touchStartRef.current = null;
         }}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        onClick={handleClick}
         onContextMenu={handleContextMenu}
         receiveShadow
       >

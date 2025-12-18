@@ -20,16 +20,9 @@ interface ColorPickerProps {
 export const ColorPicker = ({ onColorSelect }: ColorPickerProps) => {
   const selectedColor = useBrickStore((state) => state.selectedColor);
   const setSelectedColor = useBrickStore((state) => state.setSelectedColor);
-  const selectedBrickIds = useBrickStore((state) => state.selectedBrickIds);
-  const updateBrickColor = useBrickStore((state) => state.updateBrickColor);
 
   const handleColorClick = (color: string) => {
     setSelectedColor(color);
-
-    // If bricks are selected, update their color too
-    if (selectedBrickIds.size > 0) {
-      updateBrickColor([...selectedBrickIds], color);
-    }
 
     onColorSelect?.(color);
   };

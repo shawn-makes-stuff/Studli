@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ColorPopoutProps {
   isOpen: boolean;
   onClose: () => void;
   currentColor: string;
+  isDefault: boolean;
+  onDefaultSelect: () => void;
   onColorSelect: (color: string) => void;
   anchorRef: React.RefObject<HTMLElement>;
 }
@@ -22,7 +24,6 @@ const PRESET_COLORS = [
   { name: 'Brown', value: '#582A12' },
   { name: 'Tan', value: '#E4CD9E' },
   { name: 'Dark Gray', value: '#6C6E68' },
-  { name: 'Light Gray', value: '#9BA19D' },
   { name: 'Black', value: '#05131D' },
   { name: 'White', value: '#F2F3F2' },
   { name: 'Dark Blue', value: '#0A3463' },
@@ -30,10 +31,23 @@ const PRESET_COLORS = [
   { name: 'Dark Red', value: '#720E0F' },
 ];
 
-export const ColorPopout = ({ isOpen, onClose, currentColor, onColorSelect, anchorRef }: ColorPopoutProps) => {
+export const ColorPopout = ({
+  isOpen,
+  onClose,
+  currentColor,
+  isDefault,
+  onDefaultSelect,
+  onColorSelect,
+  anchorRef,
+}: ColorPopoutProps) => {
   const [customColor, setCustomColor] = useState(currentColor);
   const popoutRef = useRef<HTMLDivElement>(null);
   const customInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCustomColor(currentColor);
+  }, [currentColor, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -54,8 +68,13 @@ export const ColorPopout = ({ isOpen, onClose, currentColor, onColorSelect, anch
 
   if (!isOpen) return null;
 
-  const handleColorSelect = (color: string) => {
+  const handlePresetSelect = (color: string) => {
     onColorSelect(color);
+    onClose();
+  };
+
+  const handleDefaultClick = () => {
+    onDefaultSelect();
     onClose();
   };
 
@@ -79,20 +98,35 @@ export const ColorPopout = ({ isOpen, onClose, currentColor, onColorSelect, anch
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-white p-1 -m-1 touch-manipulation"
+          aria-label="Close color picker"
         >
-          ✕
+          X
         </button>
       </div>
 
       {/* Preset Colors Grid */}
       <div className="grid grid-cols-6 gap-2 mb-3">
+        <button
+          onClick={handleDefaultClick}
+          className={`
+            w-10 h-10 rounded-lg border-2 transition-all active:scale-95 touch-manipulation flex items-center justify-center
+            ${isDefault
+              ? 'border-white ring-2 ring-blue-500'
+              : 'border-gray-600 hover:border-gray-400 bg-gray-700/60'
+            }
+          `}
+          title="Default color"
+        >
+          <span className="text-white font-black text-lg leading-none">*</span>
+        </button>
+
         {PRESET_COLORS.map((color) => (
           <button
             key={color.value}
-            onClick={() => handleColorSelect(color.value)}
+            onClick={() => handlePresetSelect(color.value)}
             className={`
               w-10 h-10 rounded-lg border-2 transition-all active:scale-95 touch-manipulation
-              ${currentColor.toLowerCase() === color.value.toLowerCase()
+              ${!isDefault && currentColor.toLowerCase() === color.value.toLowerCase()
                 ? 'border-white ring-2 ring-blue-500'
                 : 'border-gray-600 hover:border-gray-400'
               }

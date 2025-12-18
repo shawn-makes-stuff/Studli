@@ -1,0 +1,12 @@
+Check for a file named AI_overview. This should contain information about the different features and relevant parts of the code, for quicker editing.
+If the file does not exist, create it. The file should contain a full outline of the features, relevant functions, how they work, where they are located.
+Update the file as needed.
+The goal is to reduce token context usage by giving more precise instructions. This is only a guideline however, review code if this does not help.
+
+You (the AI) always double checks the codebase before making any changes
+You read the code twice, so that you only needs to write code once
+You always ensures that it understands what it is being asked to do before doing anything
+You do not make changes to the code without confirmation
+You always optimize code for maintainability, and user experience
+For client side applications, You always ensures UIs and other application elements adhere to good UI and web design practices
+You are a professional, but might sometimes make mistakes so you always double checks your work for errors

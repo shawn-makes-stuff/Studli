@@ -9,9 +9,10 @@ export const rotatePoint = (x: number, z: number, rotation: number): [number, nu
   const r = ((rotation % 4) + 4) % 4; // Normalize to 0-3
   switch (r) {
     case 0: return [x, z];
-    case 1: return [-z, x];
+    // Matches Three.js positive Y rotation (90° steps): (x, z) -> (z, -x)
+    case 1: return [z, -x];
     case 2: return [-x, -z];
-    case 3: return [z, -x];
+    case 3: return [-z, x];
     default: return [x, z];
   }
 };

@@ -9,13 +9,13 @@ import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
 import { getCachedSlopeGeometry, getCachedCornerSlopeGeometry, calculateStudPositions, getStudGeometry } from '../utils/geometry';
 
 export const BrickPreview = () => {
-  const cursorPosition = useBrickStore((state) => state.cursorPosition);
+  const raycastHit = useBrickStore((state) => state.raycastHit);
   const selectedBrickType = useBrickStore((state) => state.selectedBrickType);
   const selectedColor = useBrickStore((state) => state.selectedColor);
+  const useDefaultColor = useBrickStore((state) => state.useDefaultColor);
   const rotation = useBrickStore((state) => state.rotation);
   const layerOffset = useBrickStore((state) => state.layerOffset);
   const placedBricks = useBrickStore((state) => state.placedBricks);
-  const mode = useBrickStore((state) => state.mode);
 
   const width = (selectedBrickType?.studsX ?? 1) * STUD_SPACING;
   const depth = (selectedBrickType?.studsZ ?? 1) * STUD_SPACING;
@@ -26,11 +26,22 @@ export const BrickPreview = () => {
 
   // Calculate preview position and validity
   const previewData = useMemo(() => {
-    if (!cursorPosition || !selectedBrickType) return null;
+    if (!raycastHit || !selectedBrickType) return null;
+
+    let targetX = raycastHit.position[0];
+    let targetZ = raycastHit.position[2];
+
+    // If hitting a side face, offset the placement position
+    if (raycastHit.isTopFace === false && !raycastHit.hitGround) {
+      // Place adjacent to the side we're looking at
+      const offsetDistance = STUD_SPACING / 2;
+      targetX += raycastHit.normal[0] * offsetDistance;
+      targetZ += raycastHit.normal[2] * offsetDistance;
+    }
 
     const [snappedX, snappedZ] = snapToGrid(
-      cursorPosition[0],
-      cursorPosition[1],
+      targetX,
+      targetZ,
       selectedBrickType.studsX,
       selectedBrickType.studsZ,
       rotation
@@ -54,7 +65,7 @@ export const BrickPreview = () => {
       position: [snappedX, result.bottomY, snappedZ] as [number, number, number],
       isValid: result.isValid
     };
-  }, [cursorPosition, selectedBrickType, rotation, layerOffset, placedBricks, height]);
+  }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height]);
 
   // Get cached slope geometry
   const slopeGeometry = useMemo(() => {
@@ -77,21 +88,22 @@ export const BrickPreview = () => {
     return calculateStudPositions(selectedBrickType.studsX, selectedBrickType.studsZ, depth, selectedBrickType.variant, isInverted);
   }, [selectedBrickType, depth, isInverted]);
 
-  // Don't render if not in build mode or no selection
-  if (mode !== 'build') return null;
+  // Don't render if no selection or no valid raycast
   if (!selectedBrickType || !previewData) return null;
 
-  const previewColor = previewData.isValid ? selectedColor : '#ff0000';
+  const effectiveColor = useDefaultColor ? selectedBrickType.color : selectedColor;
+  const previewColor = previewData.isValid ? effectiveColor : '#ff0000';
   const opacity = previewData.isValid ? 0.6 : 0.4;
 
   return (
     <group
       position={[previewData.position[0], previewData.position[1] + height / 2, previewData.position[2]]}
       rotation={[0, rotation * Math.PI / 2, 0]}
+      userData={{ ignoreRaycast: true }}
     >
       {/* Main brick body */}
       {isSlope && slopeGeometry ? (
-        <mesh geometry={slopeGeometry}>
+        <mesh key="preview-slope" geometry={slopeGeometry}>
           <meshStandardMaterial
             color={previewColor}
             transparent
@@ -101,7 +113,7 @@ export const BrickPreview = () => {
           />
         </mesh>
       ) : isCornerSlope && cornerSlopeGeometry ? (
-        <mesh geometry={cornerSlopeGeometry}>
+        <mesh key="preview-corner-slope" geometry={cornerSlopeGeometry}>
           <meshStandardMaterial
             color={previewColor}
             transparent
@@ -111,7 +123,7 @@ export const BrickPreview = () => {
           />
         </mesh>
       ) : (
-        <mesh>
+        <mesh key="preview-box">
           <boxGeometry args={[width, height, depth]} />
           <meshStandardMaterial
             color={previewColor}
