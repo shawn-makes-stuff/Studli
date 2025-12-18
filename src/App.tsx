@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Scene } from './components/Scene';
 import { BottomBar } from './ui/BottomBar';
+import { ControlsHelp } from './ui/ControlsHelp';
 import { Crosshair } from './ui/Crosshair';
 import { LandscapeRequiredOverlay } from './ui/LandscapeRequiredOverlay';
 import { VirtualJoystick } from './ui/VirtualJoystick';
@@ -44,6 +45,7 @@ function App() {
 
       {/* UI Overlays */}
       <Crosshair />
+      <ControlsHelp isMobile={isMobile} hidden={requireLandscape} />
       {!requireLandscape && <BottomBar />}
 
       {/* Mobile Controls */}

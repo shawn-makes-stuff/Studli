@@ -61,7 +61,7 @@ export const Scene = () => {
     <Canvas
       shadows
       camera={{ position: [0, 8, 15], fov: 70 }}
-      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh' }}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       gl={{ alpha: false }}
       onContextMenu={(e) => e.preventDefault()}
     >

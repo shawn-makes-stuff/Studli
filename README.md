@@ -1,6 +1,6 @@
 # Studli
 
-A 3D LEGO-style brick building application built with React, Three.js, and TypeScript.
+A 3D brick building application built with React, Three.js, and TypeScript.
 
 ![React](https://img.shields.io/badge/React-18-blue) ![Three.js](https://img.shields.io/badge/Three.js-r158-green) ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 
@@ -13,6 +13,7 @@ A 3D LEGO-style brick building application built with React, Three.js, and TypeS
 - **Undo/Redo**: Ctrl/Cmd+Z / Ctrl/Cmd+Y (Undo button in the toolbar)
 - **Desktop Camera**: Esc toggles mouse capture, WASD movement, Shift sprint, scroll wheel zoom
 - **Mobile**: Dual on-screen joysticks, tap-to-place, pinch zoom
+- **PWA**: Installable app (works offline after first load)
 
 ## Controls
 
@@ -73,6 +74,11 @@ npm run build
 ```
 
 The built files will be in the `dist/` directory.
+
+## PWA (Install as App)
+
+- **Chrome/Edge (desktop & Android)**: use the browser's Install option (or the install icon in the address bar).
+- **iOS Safari**: Share → Add to Home Screen.
 
 ## Tech Stack
 

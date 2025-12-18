@@ -566,7 +566,8 @@ export const getLayerPosition = (
   layerOffset: number,
   isSlope: boolean = false,
   isInverted: boolean = false,
-  isCornerSlope: boolean = false
+  isCornerSlope: boolean = false,
+  preferredBottomY?: number
 ): LayerPositionResult => {
   const validLayers = findValidLayers(
     gridX, gridZ, studsX, studsZ, rotation, newBrickHeight, placedBricks, isSlope, isInverted, isCornerSlope
@@ -578,6 +579,27 @@ export const getLayerPosition = (
     return { bottomY: stackHeight, isValid: false };
   }
 
-  const index = Math.max(0, Math.min(validLayers.length - 1, validLayers.length - 1 + layerOffset));
+  const clampIndex = (value: number) => Math.max(0, Math.min(validLayers.length - 1, value));
+
+  const baseIndex = (() => {
+    if (typeof preferredBottomY !== 'number' || !Number.isFinite(preferredBottomY)) {
+      return validLayers.length - 1;
+    }
+
+    let bestIndex = 0;
+    let bestDistance = Math.abs(validLayers[0] - preferredBottomY);
+
+    for (let i = 1; i < validLayers.length; i++) {
+      const dist = Math.abs(validLayers[i] - preferredBottomY);
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestIndex = i;
+      }
+    }
+
+    return bestIndex;
+  })();
+
+  const index = clampIndex(baseIndex + layerOffset);
   return { bottomY: validLayers[index], isValid: true };
 };

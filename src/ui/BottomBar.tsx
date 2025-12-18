@@ -21,7 +21,11 @@ export const BottomBar = () => {
   });
   const [viewport, setViewport] = useState(() => {
     if (typeof window === 'undefined') return { width: 0, height: 0 };
-    return { width: window.innerWidth, height: window.innerHeight };
+    const vv = window.visualViewport;
+    return {
+      width: Math.round(vv?.width ?? window.innerWidth),
+      height: Math.round(vv?.height ?? window.innerHeight)
+    };
   });
   const colorButtonRef = useRef<HTMLDivElement>(null);
   const brickPickerButtonRef = useRef<HTMLDivElement>(null);
@@ -36,6 +40,7 @@ export const BottomBar = () => {
   const rotatePreview = useBrickStore((state) => state.rotatePreview);
   const undo = useBrickStore((state) => state.undo);
   const past = useBrickStore((state) => state.past);
+  const setUiControlsDisabled = useBrickStore((state) => state.setUiControlsDisabled);
 
   const handleBrickPickerClick = () => {
     // Exit pointer lock when opening UI elements
@@ -74,19 +79,35 @@ export const BottomBar = () => {
   };
 
   const isCompactHeight = viewport.height > 0 && viewport.height <= 500;
+  const isSmallScreen = viewport.width > 0 && (viewport.width < 640 || viewport.height < 520);
 
   // Show fewer recent bricks on narrow or short screens
   const recentBricksToShow =
-    typeof window !== 'undefined' && (window.innerWidth < 400 || isCompactHeight) ? 4 : 5;
+    viewport.width > 0 && (viewport.width < 400 || isCompactHeight) ? 4 : 5;
   const effectiveColor = useDefaultColor ? selectedBrickType.color : selectedColor;
 
   useEffect(() => {
-    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    setUiControlsDisabled(isSmallScreen && (showBrickPicker || showColorPopout));
+    return () => setUiControlsDisabled(false);
+  }, [isSmallScreen, setUiControlsDisabled, showBrickPicker, showColorPopout]);
+
+  useEffect(() => {
+    const update = () => {
+      const vv = window.visualViewport;
+      setViewport({
+        width: Math.round(vv?.width ?? window.innerWidth),
+        height: Math.round(vv?.height ?? window.innerHeight)
+      });
+    };
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
     return () => {
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
+      window.visualViewport?.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('scroll', update);
     };
   }, []);
 
@@ -133,7 +154,9 @@ export const BottomBar = () => {
               title="Select color"
             >
               {useDefaultColor && (
-                <span className="text-white font-black text-lg leading-none drop-shadow">*</span>
+                <span className="text-white font-black text-[22px] leading-none drop-shadow-sm translate-y-[1px] select-none">
+                  *
+                </span>
               )}
             </button>
             <ColorPopout

@@ -6,6 +6,7 @@ import { getBrickBounds } from '../utils/collision';
 import type { PlacedBrick } from '../types/brick';
 import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
 import { getBrickHeight, STUD_SPACING } from '../types/brick';
+import { v4 as uuidv4 } from 'uuid';
 
 const MOVEMENT_SPEED = 5;
 const FAST_MOVEMENT_MULTIPLIER = 2;
@@ -16,6 +17,8 @@ const MIN_FOV = 35;
 const MAX_FOV = 120;
 const WHEEL_ZOOM_SENSITIVITY = 0.03;
 const PINCH_ZOOM_SENSITIVITY = 0.06;
+const TOUCH_TAP_MAX_DISTANCE = 10;
+const TOUCH_TAP_MAX_TIME = 300;
 
 // Detect actual mobile/tablet devices (including iPad)
 const detectMobile = () => {
@@ -48,6 +51,7 @@ export const FirstPersonControls = () => {
     idA: number;
     idB: number;
   } | null>(null);
+  const tapRef = useRef<{ x: number; y: number; time: number; id: number; moved: boolean } | null>(null);
 
   const [moveForward, setMoveForward] = useState(false);
   const [moveBackward, setMoveBackward] = useState(false);
@@ -63,7 +67,80 @@ export const FirstPersonControls = () => {
   const virtualJoystickCamera = useBrickStore((state) => state.virtualJoystickCamera);
   const virtualAscend = useBrickStore((state) => state.virtualAscend);
   const virtualDescend = useBrickStore((state) => state.virtualDescend);
+  const uiControlsDisabled = useBrickStore((state) => state.uiControlsDisabled);
   const isTouchDevice = detectMobile();
+
+  const tryPlaceFromRaycast = () => {
+    const state = useBrickStore.getState();
+    const selectedBrickType = state.selectedBrickType;
+    const raycastHit = state.raycastHit;
+    if (!selectedBrickType || !raycastHit) return false;
+
+    const effectiveColor = state.useDefaultColor ? selectedBrickType.color : state.selectedColor;
+
+    let targetX = raycastHit.position[0];
+    let targetZ = raycastHit.position[2];
+
+    if (raycastHit.isTopFace === false && !raycastHit.hitGround) {
+      const offsetDistance = STUD_SPACING / 2;
+      targetX += raycastHit.normal[0] * offsetDistance;
+      targetZ += raycastHit.normal[2] * offsetDistance;
+    }
+
+    const [snappedX, snappedZ] = snapToGrid(
+      targetX,
+      targetZ,
+      selectedBrickType.studsX,
+      selectedBrickType.studsZ,
+      state.rotation
+    );
+
+    const height = getBrickHeight(selectedBrickType.variant);
+
+    let preferredBottomY: number | undefined;
+    if (raycastHit.hitBrick) {
+      const bounds = getBrickBounds(raycastHit.hitBrick);
+      if (bounds) {
+        if (raycastHit.normal[1] < -0.7) {
+          preferredBottomY = bounds.bottomY - height;
+        } else if (raycastHit.isTopFace) {
+          preferredBottomY = bounds.topY;
+        }
+      }
+    } else if (raycastHit.hitGround) {
+      // If you can see the ground through an opening, prefer placing on the base layer
+      // instead of jumping to the topmost valid layer (e.g. above an overhang).
+      preferredBottomY = 0;
+    }
+
+    const result = getLayerPosition(
+      snappedX,
+      snappedZ,
+      selectedBrickType.studsX,
+      selectedBrickType.studsZ,
+      state.rotation,
+      height,
+      state.placedBricks,
+      state.layerOffset,
+      selectedBrickType.variant === 'slope',
+      selectedBrickType.isInverted ?? false,
+      selectedBrickType.variant === 'corner-slope',
+      preferredBottomY
+    );
+
+    if (!result.isValid) return false;
+
+    state.addBrick({
+      id: uuidv4(),
+      typeId: selectedBrickType.id,
+      position: [snappedX, result.bottomY + height / 2, snappedZ],
+      color: effectiveColor,
+      rotation: state.rotation
+    });
+
+    state.addToRecentBricks(selectedBrickType);
+    return true;
+  };
 
   // Keyboard controls
   useEffect(() => {
@@ -73,64 +150,74 @@ export const FirstPersonControls = () => {
         return;
       }
 
+      const allowDesktopMovement = isPointerLockedRef.current;
+
       switch (event.code) {
         case 'KeyW':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveForward(true);
           break;
         case 'KeyS':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveBackward(true);
           break;
         case 'KeyA':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveLeft(true);
           break;
         case 'KeyD':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveRight(true);
           break;
         case 'Space':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveUp(true);
           break;
         case 'ControlLeft':
         case 'ControlRight':
-          event.preventDefault();
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
           setMoveDown(true);
           break;
         case 'ShiftLeft':
         case 'ShiftRight':
+          if (!isTouchDevice && !allowDesktopMovement) return;
           setIsFastMove(true);
           break;
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      const allowDesktopMovement = isPointerLockedRef.current;
       switch (event.code) {
         case 'KeyW':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveForward(false);
           break;
         case 'KeyS':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveBackward(false);
           break;
         case 'KeyA':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveLeft(false);
           break;
         case 'KeyD':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveRight(false);
           break;
         case 'Space':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveUp(false);
           break;
         case 'ControlLeft':
         case 'ControlRight':
-          event.preventDefault();
+          if (allowDesktopMovement) event.preventDefault();
           setMoveDown(false);
           break;
         case 'ShiftLeft':
@@ -147,7 +234,7 @@ export const FirstPersonControls = () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [isTouchDevice]);
 
   // Mouse wheel zoom (desktop only)
   useEffect(() => {
@@ -188,63 +275,123 @@ export const FirstPersonControls = () => {
     const handleMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
       if (document.pointerLockElement !== gl.domElement) return;
-
-      const state = useBrickStore.getState();
-
-      const selectedBrickType = state.selectedBrickType;
-      const raycastHit = state.raycastHit;
-      if (!selectedBrickType || !raycastHit) return;
-      const effectiveColor = state.useDefaultColor ? selectedBrickType.color : state.selectedColor;
-
-      let targetX = raycastHit.position[0];
-      let targetZ = raycastHit.position[2];
-
-      if (raycastHit.isTopFace === false && !raycastHit.hitGround) {
-        const offsetDistance = STUD_SPACING / 2;
-        targetX += raycastHit.normal[0] * offsetDistance;
-        targetZ += raycastHit.normal[2] * offsetDistance;
-      }
-
-      const [snappedX, snappedZ] = snapToGrid(
-        targetX,
-        targetZ,
-        selectedBrickType.studsX,
-        selectedBrickType.studsZ,
-        state.rotation
-      );
-
-      const height = getBrickHeight(selectedBrickType.variant);
-
-      const result = getLayerPosition(
-        snappedX,
-        snappedZ,
-        selectedBrickType.studsX,
-        selectedBrickType.studsZ,
-        state.rotation,
-        height,
-        state.placedBricks,
-        state.layerOffset,
-        selectedBrickType.variant === 'slope',
-        selectedBrickType.isInverted ?? false,
-        selectedBrickType.variant === 'corner-slope'
-      );
-
-      if (!result.isValid) return;
-
-      state.addBrick({
-        id: crypto.randomUUID(),
-        typeId: selectedBrickType.id,
-        position: [snappedX, result.bottomY + height / 2, snappedZ],
-        color: effectiveColor,
-        rotation: state.rotation
-      });
-
-      state.addToRecentBricks(selectedBrickType);
+      tryPlaceFromRaycast();
     };
 
     gl.domElement.addEventListener('mousedown', handleMouseDown);
     return () => {
       gl.domElement.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [gl.domElement, isTouchDevice]);
+
+  // Tap to place (touch devices)
+  useEffect(() => {
+    if (!isTouchDevice) return;
+
+    const el = gl.domElement;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (uiControlsDisabled) return;
+      if (event.touches.length !== 1) {
+        tapRef.current = null;
+        return;
+      }
+
+      const touch = event.touches[0];
+      tapRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: performance.now(),
+        id: touch.identifier,
+        moved: false
+      };
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (uiControlsDisabled) return;
+      const start = tapRef.current;
+      if (!start) return;
+      if (event.touches.length !== 1) {
+        tapRef.current = null;
+        return;
+      }
+      const touch = Array.from(event.touches).find((t) => t.identifier === start.id);
+      if (!touch) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (Math.hypot(dx, dy) > TOUCH_TAP_MAX_DISTANCE) {
+        tapRef.current = { ...start, moved: true };
+      }
+    };
+
+    const handleTouchEndOrCancel = (event: TouchEvent) => {
+      if (uiControlsDisabled) {
+        tapRef.current = null;
+        return;
+      }
+      const start = tapRef.current;
+      if (!start) return;
+
+      const touch = Array.from(event.changedTouches).find((t) => t.identifier === start.id);
+      if (!touch) return;
+
+      tapRef.current = null;
+
+      // Ignore taps that were part of a pinch gesture
+      if (pinchRef.current?.isActive) return;
+
+      const elapsed = performance.now() - start.time;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      const dist = Math.hypot(dx, dy);
+      const moved = start.moved || dist > TOUCH_TAP_MAX_DISTANCE;
+      if (moved || elapsed > TOUCH_TAP_MAX_TIME) return;
+
+      tryPlaceFromRaycast();
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: true });
+    el.addEventListener('touchend', handleTouchEndOrCancel, { passive: true });
+    el.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEndOrCancel);
+      el.removeEventListener('touchcancel', handleTouchEndOrCancel);
+    };
+  }, [gl.domElement, isTouchDevice, uiControlsDisabled]);
+
+  // Suppress browser shortcuts/scrolling while in build mode (pointer-locked).
+  useEffect(() => {
+    if (isTouchDevice) return;
+
+    const shouldSuppress = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return false;
+      }
+
+      if (document.pointerLockElement !== gl.domElement) return false;
+      if (event.code === 'Escape') return false;
+      return true;
+    };
+
+    const handleKeyDownCapture = (event: KeyboardEvent) => {
+      if (!shouldSuppress(event)) return;
+      event.preventDefault();
+    };
+
+    const handleKeyUpCapture = (event: KeyboardEvent) => {
+      if (!shouldSuppress(event)) return;
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDownCapture, true);
+    window.addEventListener('keyup', handleKeyUpCapture, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownCapture, true);
+      window.removeEventListener('keyup', handleKeyUpCapture, true);
     };
   }, [gl.domElement, isTouchDevice]);
 
@@ -268,6 +415,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchStart = (event: TouchEvent) => {
+      if (uiControlsDisabled) return;
       const touches = event.targetTouches;
       if (touches.length < 2) return;
 
@@ -283,6 +431,10 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchMove = (event: TouchEvent) => {
+      if (uiControlsDisabled) {
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
       const pinch = pinchRef.current;
       if (!pinch?.isActive) return;
 
@@ -307,6 +459,10 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchEndOrCancel = (event: TouchEvent) => {
+      if (uiControlsDisabled) {
+        pinchRef.current = null;
+        return;
+      }
       const pinch = pinchRef.current;
       if (!pinch?.isActive) return;
 
@@ -343,18 +499,62 @@ export const FirstPersonControls = () => {
       el.removeEventListener('touchend', handleTouchEndOrCancel);
       el.removeEventListener('touchcancel', handleTouchEndOrCancel);
     };
-  }, [camera, gl.domElement, isTouchDevice]);
+  }, [camera, gl.domElement, isTouchDevice, uiControlsDisabled]);
 
   // Pointer lock management (desktop only)
   useEffect(() => {
     if (isTouchDevice) return;
 
+    const keyboard = (navigator as unknown as {
+      keyboard?: { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
+    }).keyboard;
+
+    const tryLockKeyboard = () => {
+      if (!keyboard?.lock) return;
+      void keyboard.lock([
+        'KeyW',
+        'KeyA',
+        'KeyS',
+        'KeyD',
+        'Space',
+        'ShiftLeft',
+        'ShiftRight',
+        'ControlLeft',
+        'ControlRight',
+        'KeyR',
+        'KeyZ',
+        'KeyY'
+      ]).catch(() => {
+        // Ignore (unsupported without fullscreen in many browsers)
+      });
+    };
+
+    const tryUnlockKeyboard = () => {
+      if (!keyboard?.unlock) return;
+      try {
+        keyboard.unlock();
+      } catch {
+        // ignore
+      }
+    };
+
     const handlePointerLockChange = () => {
       const locked = document.pointerLockElement === gl.domElement;
       setIsPointerLocked(locked);
       isPointerLockedRef.current = locked;
-      if (!locked) {
+      if (locked) {
+        tryLockKeyboard();
+      } else {
+        tryUnlockKeyboard();
         lastPointerLockExitAtRef.current = performance.now();
+        setMoveForward(false);
+        setMoveBackward(false);
+        setMoveLeft(false);
+        setMoveRight(false);
+        setMoveUp(false);
+        setMoveDown(false);
+        setIsFastMove(false);
+        velocityRef.current.set(0, 0, 0);
       }
     };
 
@@ -387,6 +587,7 @@ export const FirstPersonControls = () => {
 
       if (!isPointerLockedRef.current) {
         gl.domElement.requestPointerLock();
+        tryLockKeyboard();
       }
     };
 
@@ -467,6 +668,7 @@ export const FirstPersonControls = () => {
 
   // Update loop
   useFrame((_state, delta) => {
+    const allowTouchControls = isTouchDevice && !uiControlsDisabled;
 
     // Get camera direction
     camera.getWorldDirection(directionRef.current);
@@ -478,13 +680,15 @@ export const FirstPersonControls = () => {
 
     // Desktop: Use keyboard state
     if (!isTouchDevice) {
-      if (moveForward) inputVector.z -= 1;
-      if (moveBackward) inputVector.z += 1;
-      if (moveLeft) inputVector.x -= 1;
-      if (moveRight) inputVector.x += 1;
+      if (isPointerLockedRef.current) {
+        if (moveForward) inputVector.z -= 1;
+        if (moveBackward) inputVector.z += 1;
+        if (moveLeft) inputVector.x -= 1;
+        if (moveRight) inputVector.x += 1;
+      }
     } else {
       // Mobile: Use virtual joystick
-      if (virtualJoystickInput) {
+      if (allowTouchControls && virtualJoystickInput) {
         inputVector.x = virtualJoystickInput.x;
         inputVector.z = virtualJoystickInput.y;
       }
@@ -506,11 +710,15 @@ export const FirstPersonControls = () => {
     velocityRef.current.addScaledVector(forward, -inputVector.z * speed); // Negate for correct forward/back
 
     // Add vertical movement
-    if (moveUp || (isTouchDevice && virtualAscend)) velocityRef.current.y += speed;
-    if (moveDown || (isTouchDevice && virtualDescend)) velocityRef.current.y -= speed;
+    if ((allowTouchControls && virtualAscend) || (!isTouchDevice && isPointerLockedRef.current && moveUp)) {
+      velocityRef.current.y += speed;
+    }
+    if ((allowTouchControls && virtualDescend) || (!isTouchDevice && isPointerLockedRef.current && moveDown)) {
+      velocityRef.current.y -= speed;
+    }
 
     // Handle camera rotation for mobile
-    if (isTouchDevice && virtualJoystickCamera) {
+    if (allowTouchControls && virtualJoystickCamera) {
       const baseRotationSpeed = 0.7; // Radians per second at max joystick deflection (large screens)
       const minDim = Math.min(window.innerWidth, window.innerHeight);
       const scale = Math.max(0.45, Math.min(1, minDim / 800));

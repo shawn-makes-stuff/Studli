@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { BrickType, BRICK_TYPES, PlacedBrick } from '../types/brick';
 
+const DEFAULT_BRICK_TYPE: BrickType =
+  BRICK_TYPES.find((b) => b.id === '2x2-brick') ?? BRICK_TYPES[0];
+
 interface HistoryState {
   placedBricks: PlacedBrick[];
 }
@@ -21,6 +24,9 @@ interface BrickStore {
   rotation: number;
   layerOffset: number;
   recentBricks: BrickType[];
+
+  // UI state
+  uiControlsDisabled: boolean;
 
   // Placement/raycast state
   raycastHit: RaycastHit | null;
@@ -52,6 +58,8 @@ interface BrickStore {
   undo: () => void;
   redo: () => void;
 
+  setUiControlsDisabled: (disabled: boolean) => void;
+
   setRaycastHit: (hit: RaycastHit | null) => void;
   setVirtualJoystickInput: (input: { x: number; y: number } | null) => void;
   setVirtualJoystickCamera: (input: { x: number; y: number } | null) => void;
@@ -65,12 +73,14 @@ const saveToHistory = (state: BrickStore): HistoryState => ({
 
 export const useBrickStore = create<BrickStore>((set) => ({
   placedBricks: [],
-  selectedBrickType: BRICK_TYPES[0],
-  selectedColor: BRICK_TYPES[0].color,
+  selectedBrickType: DEFAULT_BRICK_TYPE,
+  selectedColor: DEFAULT_BRICK_TYPE.color,
   useDefaultColor: true,
   rotation: 0,
   layerOffset: 0,
   recentBricks: [],
+
+  uiControlsDisabled: false,
 
   raycastHit: null,
   virtualJoystickInput: null,
@@ -129,6 +139,8 @@ export const useBrickStore = create<BrickStore>((set) => ({
       placedBricks: next.placedBricks
     };
   }),
+
+  setUiControlsDisabled: (disabled) => set({ uiControlsDisabled: disabled }),
 
   setRaycastHit: (hit) => set({ raycastHit: hit }),
   setVirtualJoystickInput: (input) => set({ virtualJoystickInput: input }),

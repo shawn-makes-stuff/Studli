@@ -9,11 +9,37 @@ import { STUD_SPACING, STUD_RADIUS, STUD_HEIGHT, PLATE_HEIGHT, BrickVariant } fr
 // Shared cylinder geometry for studs (reused across all bricks)
 let sharedStudGeometry: THREE.CylinderGeometry | null = null;
 
+// Cached box geometries (reused across all regular bricks/plates/tiles)
+const boxGeometryCache = new Map<string, THREE.BoxGeometry>();
+
+// Cached edges geometries (for cavity-like edge enhancement)
+const edgesGeometryCache = new Map<string, THREE.EdgesGeometry>();
+
 export const getStudGeometry = (): THREE.CylinderGeometry => {
   if (!sharedStudGeometry) {
     sharedStudGeometry = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
   }
   return sharedStudGeometry;
+};
+
+export const getCachedBoxGeometry = (width: number, height: number, depth: number): THREE.BoxGeometry => {
+  const key = `box-${width}-${height}-${depth}`;
+  if (!boxGeometryCache.has(key)) {
+    boxGeometryCache.set(key, new THREE.BoxGeometry(width, height, depth));
+  }
+  return boxGeometryCache.get(key)!;
+};
+
+export const getCachedEdgesGeometry = (
+  geometryKey: string,
+  sourceGeometry: THREE.BufferGeometry,
+  thresholdAngle: number = 35
+): THREE.EdgesGeometry => {
+  const key = `edges-${geometryKey}-${thresholdAngle}`;
+  if (!edgesGeometryCache.has(key)) {
+    edgesGeometryCache.set(key, new THREE.EdgesGeometry(sourceGeometry, thresholdAngle));
+  }
+  return edgesGeometryCache.get(key)!;
 };
 
 /**
@@ -345,4 +371,10 @@ export const getCachedCornerSlopeGeometry = (width: number, height: number, dept
 export const clearGeometryCache = (): void => {
   geometryCache.forEach(geo => geo.dispose());
   geometryCache.clear();
+
+  boxGeometryCache.forEach((geo) => geo.dispose());
+  boxGeometryCache.clear();
+
+  edgesGeometryCache.forEach((geo) => geo.dispose());
+  edgesGeometryCache.clear();
 };

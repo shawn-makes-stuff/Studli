@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import {
   STUD_SPACING,
   STUD_HEIGHT,
@@ -8,7 +9,9 @@ import {
 } from '../types/brick';
 import {
   calculateStudPositions,
+  getCachedBoxGeometry,
   getCachedCornerSlopeGeometry,
+  getCachedEdgesGeometry,
   getCachedSlopeGeometry,
   getStudGeometry
 } from '../utils/geometry';
@@ -38,6 +41,24 @@ export const Brick = ({ brick }: BrickProps) => {
     return getCachedCornerSlopeGeometry(width, height, depth, isInverted);
   }, [isCornerSlope, width, height, depth, isInverted]);
 
+  const boxGeometry = useMemo(() => {
+    if (isSlope || isCornerSlope) return null;
+    return getCachedBoxGeometry(width, height, depth);
+  }, [depth, height, isCornerSlope, isSlope, width]);
+
+  const bodyGeometryKey = isSlope
+    ? `slope-${width}-${height}-${depth}-${isInverted}`
+    : isCornerSlope
+      ? `corner-slope-${width}-${height}-${depth}-${isInverted}`
+      : `box-${width}-${height}-${depth}`;
+
+  const bodyGeometry = slopeGeometry ?? cornerSlopeGeometry ?? boxGeometry;
+
+  const cavityEdgesGeometry = useMemo(() => {
+    if (!bodyGeometry) return null;
+    return getCachedEdgesGeometry(bodyGeometryKey, bodyGeometry);
+  }, [bodyGeometry, bodyGeometryKey]);
+
   const studGeometry = useMemo(() => getStudGeometry(), []);
 
   const studPositions = useMemo(() => {
@@ -51,19 +72,33 @@ export const Brick = ({ brick }: BrickProps) => {
       userData={{ placedBrick: brick }}
     >
       {/* Main brick body */}
-      {isSlope && slopeGeometry ? (
-        <mesh geometry={slopeGeometry} castShadow receiveShadow>
-          <meshStandardMaterial color={brick.color} flatShading />
+      {bodyGeometry && (
+        <mesh geometry={bodyGeometry} castShadow receiveShadow>
+          <meshStandardMaterial color={brick.color} flatShading={isSlope || isCornerSlope} />
         </mesh>
-      ) : isCornerSlope && cornerSlopeGeometry ? (
-        <mesh geometry={cornerSlopeGeometry} castShadow receiveShadow>
-          <meshStandardMaterial color={brick.color} flatShading />
-        </mesh>
-      ) : (
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[width, height, depth]} />
-          <meshStandardMaterial color={brick.color} />
-        </mesh>
+      )}
+
+      {/* Cavity-like edge enhancement (dark valleys + bright ridges) */}
+      {cavityEdgesGeometry && (
+        <>
+          <lineSegments geometry={cavityEdgesGeometry} userData={{ ignoreRaycast: true }} renderOrder={10}>
+            <lineBasicMaterial
+              color="#000000"
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            />
+          </lineSegments>
+          <lineSegments geometry={cavityEdgesGeometry} userData={{ ignoreRaycast: true }} renderOrder={11}>
+            <lineBasicMaterial
+              color="#ffffff"
+              transparent
+              opacity={0.07}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
+          </lineSegments>
+        </>
       )}
 
       {/* Studs */}

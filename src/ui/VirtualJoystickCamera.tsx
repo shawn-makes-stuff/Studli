@@ -9,12 +9,22 @@ const MAX_DISTANCE = (JOYSTICK_SIZE - KNOB_SIZE) / 2;
 export const VirtualJoystickCamera = () => {
   const setVirtualJoystickCamera = useBrickStore((state) => state.setVirtualJoystickCamera);
   const setVirtualDescend = useBrickStore((state) => state.setVirtualDescend);
+  const uiControlsDisabled = useBrickStore((state) => state.uiControlsDisabled);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const touchIdRef = useRef<number | null>(null);
   const baseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (uiControlsDisabled) {
+      touchIdRef.current = null;
+      setIsDragging(false);
+      setPosition({ x: 0, y: 0 });
+      setVirtualJoystickCamera(null);
+      setVirtualDescend(false);
+      return;
+    }
+
     const handleTouchStart = (e: TouchEvent) => {
       if (touchIdRef.current !== null) return;
       if (!baseRef.current) return;
@@ -92,9 +102,10 @@ export const VirtualJoystickCamera = () => {
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [setVirtualJoystickCamera]);
+  }, [setVirtualDescend, setVirtualJoystickCamera, uiControlsDisabled]);
 
   const handleDescendDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (uiControlsDisabled) return;
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -109,13 +120,14 @@ export const VirtualJoystickCamera = () => {
 
   return (
     <div
-      className="fixed bottom-20 right-6 z-20 pointer-events-none select-none flex flex-col items-end"
+      className={`fixed bottom-20 right-6 z-20 pointer-events-none select-none flex flex-col items-end ${uiControlsDisabled ? 'opacity-40' : ''}`}
     >
       <button
         onPointerDown={handleDescendDown}
         onPointerUp={handleDescendUp}
         onPointerCancel={handleDescendUp}
-        className="pointer-events-auto mb-2 w-11 h-11 rounded-full bg-gray-800/70 border-2 border-gray-600 text-white shadow-lg active:scale-95 flex items-center justify-center touch-manipulation"
+        disabled={uiControlsDisabled}
+        className={`pointer-events-auto mb-2 w-11 h-11 rounded-full bg-gray-800/70 border-2 border-gray-600 text-white shadow-lg flex items-center justify-center touch-manipulation ${uiControlsDisabled ? 'cursor-not-allowed' : 'active:scale-95'}`}
         title="Descend"
       >
         <KeyboardArrowDownIcon fontSize="medium" />
@@ -123,7 +135,7 @@ export const VirtualJoystickCamera = () => {
 
       <div
         ref={baseRef}
-        className="pointer-events-auto relative"
+        className={`relative ${uiControlsDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
         style={{
           width: `${JOYSTICK_SIZE}px`,
           height: `${JOYSTICK_SIZE}px`,

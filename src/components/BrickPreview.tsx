@@ -6,6 +6,7 @@ import {
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
 import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
+import { getBrickBounds } from '../utils/collision';
 import { getCachedSlopeGeometry, getCachedCornerSlopeGeometry, calculateStudPositions, getStudGeometry } from '../utils/geometry';
 
 export const BrickPreview = () => {
@@ -47,6 +48,20 @@ export const BrickPreview = () => {
       rotation
     );
 
+    let preferredBottomY: number | undefined;
+    if (raycastHit.hitBrick) {
+      const bounds = getBrickBounds(raycastHit.hitBrick);
+      if (bounds) {
+        if (raycastHit.normal[1] < -0.7) {
+          preferredBottomY = bounds.bottomY - height;
+        } else if (raycastHit.isTopFace) {
+          preferredBottomY = bounds.topY;
+        }
+      }
+    } else if (raycastHit.hitGround) {
+      preferredBottomY = 0;
+    }
+
     const result = getLayerPosition(
       snappedX,
       snappedZ,
@@ -58,7 +73,8 @@ export const BrickPreview = () => {
       layerOffset,
       selectedBrickType.variant === 'slope',
       selectedBrickType.isInverted ?? false,
-      selectedBrickType.variant === 'corner-slope'
+      selectedBrickType.variant === 'corner-slope',
+      preferredBottomY
     );
 
     return {

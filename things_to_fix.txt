@@ -1,5 +1,18 @@
-Move color selector out of menu, and into top toolbar
-Dont rerender brick previews every time we change a color, just place in the correct color
-Make brick previews a random color so its not uniform
+----------------------------------------------------------------------
 
-Work on mobile UI and tablet UI, including touch controls.
+DONE
+- Desktop hint + help modal (desktop/touch)
+- Placement under bricks/gaps (top face prioritized; base layer when aiming at the grid)
+- Default brick is `2x2-brick`
+- Brick menu fits tiny landscape (single-row horizontal scroll)
+- Disable movement when not in build mode (desktop pointer not locked)
+- Default-color `*` centered (palette + bottom bar)
+- Small screens: when Brick Picker is open, disable controls + hide help button
+- Viewport: cavity-like edge highlight on bricks
+- Desktop: restore `Ctrl` as descend (Space up)
+- Tiny screens: color picker is 2-row horizontal scroll
+- Custom color picker (HSL sliders + hex) instead of native `<input type="color">`
+- PWA support (manifest + service worker + icons)
+
+TODO / VERIFY
+- Browser shortcut suppression in build mode: confirm `Ctrl+W` (and other reserved combos) are blocked in target browsers; some browsers may ignore `preventDefault` unless `navigator.keyboard.lock()` is supported/allowed.
