@@ -36,6 +36,7 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
 
   const detailsGroupRef = useRef<THREE.Group>(null);
   const studsRef = useRef<THREE.InstancedMesh>(null);
+  const deleteStudsHighlightRef = useRef<THREE.InstancedMesh>(null);
   const [posX, posY, posZ] = brick.position;
 
   const height = getBrickHeight(brickType.variant);
@@ -108,6 +109,7 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
   // Keep stud instances in a single draw call
   useEffect(() => {
     const studs = studsRef.current;
+    const studsHighlight = deleteStudsHighlightRef.current;
     if (!studs) return;
 
     const dummy = new THREE.Object3D();
@@ -130,7 +132,16 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
     }
 
     studs.instanceMatrix.needsUpdate = true;
-  }, [height, sideStuds, studPositions]);
+
+    if (studsHighlight && isDeleteSelected) {
+      // Mirror matrices for the highlight overlay mesh.
+      for (let i = 0; i < idx; i++) {
+        studs.getMatrixAt(i, dummy.matrix);
+        studsHighlight.setMatrixAt(i, dummy.matrix);
+      }
+      studsHighlight.instanceMatrix.needsUpdate = true;
+    }
+  }, [height, isDeleteSelected, sideStuds, studPositions]);
 
   const brickQuat = useMemo(() => getBrickQuaternion(brick.orientation, brick.rotation), [brick.orientation, brick.rotation]);
 
@@ -215,10 +226,26 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
               userData={{ isStud: true }}
               raycast={() => null}
             >
+              <meshStandardMaterial color={brick.color} />
+            </instancedMesh>
+          )}
+
+          {/* Delete selection highlight for studs */}
+          {isDeleteSelected && totalStudCount > 0 && (
+            <instancedMesh
+              ref={deleteStudsHighlightRef}
+              args={[studGeometry, undefined, totalStudCount]}
+              userData={{ ignoreRaycast: true }}
+              raycast={() => null}
+              renderOrder={21}
+            >
               <meshStandardMaterial
-                color={isDeleteSelected ? deleteHighlightColor : brick.color}
-                emissive={isDeleteSelected ? deleteHighlightColor : '#000000'}
-                emissiveIntensity={isDeleteSelected ? 0.85 : 0}
+                color={deleteHighlightColor}
+                transparent
+                opacity={0.42}
+                depthWrite={false}
+                emissive={deleteHighlightColor}
+                emissiveIntensity={1.25}
               />
             </instancedMesh>
           )}
