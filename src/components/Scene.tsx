@@ -30,6 +30,19 @@ export const Scene = () => {
   const menuOpen = useBrickStore((state) => state.menuOpen);
   const deleteMode = useBrickStore((state) => state.deleteMode);
 
+  const isTouchDevice = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }, []);
+
+  const dpr = useMemo(() => {
+    if (typeof window === 'undefined') return 1;
+    const base = window.devicePixelRatio || 1;
+    const minDim = Math.min(window.innerWidth, window.innerHeight);
+    const cap = isTouchDevice ? (minDim >= 700 ? 1.15 : 1.25) : 2;
+    return Math.max(1, Math.min(base, cap));
+  }, [isTouchDevice]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -67,18 +80,23 @@ export const Scene = () => {
 
   return (
     <Canvas
-      shadows
+      shadows={!isTouchDevice}
       camera={{ position: [0, 8, 15], fov: 70 }}
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      gl={{ alpha: false }}
+      dpr={dpr}
+      gl={{
+        alpha: false,
+        antialias: !isTouchDevice,
+        powerPreference: 'high-performance',
+      }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <ambientLight intensity={0.5} />
       <directionalLight
         position={[10, 20, 10]}
         intensity={1}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={!isTouchDevice}
+        shadow-mapSize={isTouchDevice ? [1024, 1024] : [2048, 2048]}
         shadow-camera-far={50}
         shadow-camera-left={-20}
         shadow-camera-right={20}
