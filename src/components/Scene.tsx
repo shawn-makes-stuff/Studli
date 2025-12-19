@@ -3,17 +3,21 @@ import { Grid } from './Grid';
 import { Brick } from './Brick';
 import { BrickPreview } from './BrickPreview';
 import { useBrickStore } from '../store/useBrickStore';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { FirstPersonControls } from './FirstPersonControls';
 import { BrickDetailCulling } from './BrickDetailCulling';
 
 const BrickLayer = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
+  const deleteMode = useBrickStore((state) => state.deleteMode);
+  const deleteSelectionIds = useBrickStore((state) => state.deleteSelectionIds);
+
+  const deleteSet = useMemo(() => new Set(deleteSelectionIds), [deleteSelectionIds]);
 
   return (
     <>
       {placedBricks.map((brick) => (
-        <Brick key={brick.id} brick={brick} />
+        <Brick key={brick.id} brick={brick} isDeleteSelected={deleteMode && deleteSet.has(brick.id)} />
       ))}
     </>
   );
@@ -24,6 +28,7 @@ export const Scene = () => {
   const undo = useBrickStore((state) => state.undo);
   const redo = useBrickStore((state) => state.redo);
   const menuOpen = useBrickStore((state) => state.menuOpen);
+  const deleteMode = useBrickStore((state) => state.deleteMode);
 
   // Keyboard controls
   useEffect(() => {
@@ -83,7 +88,7 @@ export const Scene = () => {
 
       <Grid />
       <BrickLayer />
-      <BrickPreview />
+      {!deleteMode && <BrickPreview />}
 
       <BrickDetailCulling />
       <FirstPersonControls />

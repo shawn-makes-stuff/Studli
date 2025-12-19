@@ -25,9 +25,10 @@ import { getBrickQuaternion } from '../utils/brickTransform';
 
 interface BrickProps {
   brick: PlacedBrick;
+  isDeleteSelected?: boolean;
 }
 
-export const Brick = ({ brick }: BrickProps) => {
+export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
 
@@ -150,6 +151,26 @@ export const Brick = ({ brick }: BrickProps) => {
       {bodyGeometry && (
         <mesh geometry={bodyGeometry} castShadow receiveShadow>
           <meshStandardMaterial color={brick.color} flatShading={isSlope || isCornerSlope} />
+        </mesh>
+      )}
+
+      {/* Delete selection highlight */}
+      {isDeleteSelected && bodyGeometry && (
+        <mesh
+          geometry={bodyGeometry}
+          scale={[1.01, 1.01, 1.01]}
+          userData={{ ignoreRaycast: true }}
+          raycast={() => null}
+          renderOrder={20}
+        >
+          <meshStandardMaterial
+            color="#ff1744"
+            transparent
+            opacity={0.22}
+            depthWrite={false}
+            emissive="#ff1744"
+            emissiveIntensity={0.75}
+          />
         </mesh>
       )}
 

@@ -5,6 +5,7 @@ import { ColorPopout } from './ColorPopout';
 import { BrickPickerPopout } from './BrickPickerPopout';
 import RotateRightIcon from '@mui/icons-material/RotateRight';
 import UndoIcon from '@mui/icons-material/Undo';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { playSfx } from '../utils/sfx';
 
 export const BottomBar = () => {
@@ -41,6 +42,8 @@ export const BottomBar = () => {
   const rotatePreview = useBrickStore((state) => state.rotatePreview);
   const undo = useBrickStore((state) => state.undo);
   const past = useBrickStore((state) => state.past);
+  const deleteMode = useBrickStore((state) => state.deleteMode);
+  const toggleDeleteMode = useBrickStore((state) => state.toggleDeleteMode);
   const setUiControlsDisabled = useBrickStore((state) => state.setUiControlsDisabled);
   const setUiPopoverOpen = useBrickStore((state) => state.setUiPopoverOpen);
   const setUiPopoverType = useBrickStore((state) => state.setUiPopoverType);
@@ -245,6 +248,26 @@ export const BottomBar = () => {
           <div className="flex flex-col items-center gap-1 pointer-events-auto">
             <span className="text-[10px] sm:text-xs text-gray-300 font-medium bg-gray-800/90 px-1 sm:px-2 py-0.5 sm:py-1 rounded backdrop-blur-sm">Actions</span>
             <div className="flex gap-1.5 sm:gap-2">
+              <button
+                onClick={() => {
+                  playSfx('click');
+                  if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                  }
+                  toggleDeleteMode();
+                }}
+                className={`
+                  w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 transition-all shadow-lg backdrop-blur-sm
+                  ${deleteMode
+                    ? 'border-red-400 bg-red-600/80'
+                    : 'border-gray-600 hover:border-gray-400 bg-gray-800/80'
+                  }
+                  active:scale-95
+                `}
+                title="Delete mode (X)"
+              >
+                <DeleteOutlineIcon className="text-white" />
+              </button>
               <button
                 onClick={() => {
                   playSfx('click');

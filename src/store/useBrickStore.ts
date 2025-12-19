@@ -134,6 +134,10 @@ interface BrickStore {
   currentProjectId: string | null;
   projects: SavedProject[];
 
+  deleteMode: boolean;
+  deleteSelectionRootId: string | null;
+  deleteSelectionIds: string[];
+
   placedBricks: PlacedBrick[];
   selectedBrickType: BrickType;
   selectedColor: string;
@@ -193,6 +197,10 @@ interface BrickStore {
   resetLayerOffset: () => void;
 
   addBrick: (brick: PlacedBrick) => void;
+  removeBricksById: (ids: string[]) => void;
+  toggleDeleteMode: () => void;
+  clearDeleteSelection: () => void;
+  setDeleteSelection: (rootId: string, ids: string[]) => void;
 
   undo: () => void;
   redo: () => void;
@@ -225,6 +233,10 @@ export const useBrickStore = create<BrickStore>((set) => ({
   hasActiveSession: false,
   currentProjectId: null,
   projects: readProjects(),
+
+  deleteMode: false,
+  deleteSelectionRootId: null,
+  deleteSelectionIds: [],
 
   placedBricks: [],
   selectedBrickType: DEFAULT_BRICK_TYPE,
@@ -270,6 +282,9 @@ export const useBrickStore = create<BrickStore>((set) => ({
       menuOpen: false,
       hasActiveSession: true,
       currentProjectId: null,
+      deleteMode: false,
+      deleteSelectionRootId: null,
+      deleteSelectionIds: [],
       past: [],
       future: [],
       placedBricks: [],
@@ -328,6 +343,9 @@ export const useBrickStore = create<BrickStore>((set) => ({
       menuOpen: false,
       hasActiveSession: true,
       currentProjectId: project.id,
+      deleteMode: false,
+      deleteSelectionRootId: null,
+      deleteSelectionIds: [],
       past: [],
       future: [],
       placedBricks: project.snapshot.placedBricks ?? [],
@@ -409,13 +427,44 @@ export const useBrickStore = create<BrickStore>((set) => ({
     layerOffset: 0
   })),
 
+  removeBricksById: (ids) => set((state) => {
+    if (!ids || ids.length === 0) return state;
+    const remove = new Set(ids);
+    const nextPlaced = state.placedBricks.filter((b) => !remove.has(b.id));
+    if (nextPlaced.length === state.placedBricks.length) return state;
+    return {
+      hasActiveSession: true,
+      past: [...state.past, saveToHistory(state)],
+      future: [],
+      placedBricks: nextPlaced,
+    };
+  }),
+
+  toggleDeleteMode: () => set((state) => ({
+    deleteMode: !state.deleteMode,
+    deleteSelectionRootId: null,
+    deleteSelectionIds: [],
+  })),
+
+  clearDeleteSelection: () => set(() => ({
+    deleteSelectionRootId: null,
+    deleteSelectionIds: [],
+  })),
+
+  setDeleteSelection: (rootId, ids) => set(() => ({
+    deleteSelectionRootId: rootId,
+    deleteSelectionIds: Array.from(new Set(ids)),
+  })),
+
   undo: () => set((state) => {
     if (state.past.length === 0) return state;
     const previous = state.past[state.past.length - 1];
     return {
       past: state.past.slice(0, -1),
       future: [saveToHistory(state), ...state.future],
-      placedBricks: previous.placedBricks
+      placedBricks: previous.placedBricks,
+      deleteSelectionRootId: null,
+      deleteSelectionIds: [],
     };
   }),
 
@@ -425,7 +474,9 @@ export const useBrickStore = create<BrickStore>((set) => ({
     return {
       past: [...state.past, saveToHistory(state)],
       future: state.future.slice(1),
-      placedBricks: next.placedBricks
+      placedBricks: next.placedBricks,
+      deleteSelectionRootId: null,
+      deleteSelectionIds: [],
     };
   }),
 

@@ -16,6 +16,7 @@ import { findNearestLocalPoint, getBottomConnectionPoints, getSelectedConnection
 import { rotatePoint } from '../utils/math';
 import { getBrickQuaternion, normalToOrientation } from '../utils/brickTransform';
 import { findNearestStudConnectorOnFace } from '../utils/studConnectors';
+import { computeCascadeDeleteIds } from '../utils/deleteCascade';
 
 const MOVEMENT_SPEED = 5;
 const FAST_MOVEMENT_MULTIPLIER = 2;
@@ -88,7 +89,31 @@ export const FirstPersonControls = () => {
     const state = useBrickStore.getState();
     const selectedBrickType = state.selectedBrickType;
     const raycastHit = state.raycastHit;
-    if (!selectedBrickType || !raycastHit) return false;
+    if (!raycastHit) return false;
+
+    // Delete mode: tap once to select the brick under the cursor, tap again to delete the selection.
+    if (state.deleteMode) {
+      const hitBrick = raycastHit.hitBrick;
+      if (!hitBrick) {
+        state.clearDeleteSelection();
+        return false;
+      }
+
+      const rootId = hitBrick.id;
+      if (state.deleteSelectionRootId === rootId && state.deleteSelectionIds.length > 0) {
+        state.removeBricksById(state.deleteSelectionIds);
+        state.clearDeleteSelection();
+        playSfx('place');
+        return true;
+      }
+
+      const ids = computeCascadeDeleteIds(state.placedBricks, rootId);
+      state.setDeleteSelection(rootId, ids);
+      playSfx('click');
+      return true;
+    }
+
+    if (!selectedBrickType) return false;
 
     const effectiveColor = state.useDefaultColor ? selectedBrickType.color : state.selectedColor;
 
@@ -253,6 +278,11 @@ export const FirstPersonControls = () => {
       const allowDesktopMovement = isPointerLockedRef.current;
 
       switch (event.code) {
+        case 'KeyX':
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
+          useBrickStore.getState().toggleDeleteMode();
+          break;
         case 'KeyC':
           if (!isTouchDevice && !allowDesktopMovement) return;
           if (allowDesktopMovement) event.preventDefault();

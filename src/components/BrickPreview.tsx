@@ -35,6 +35,7 @@ export const BrickPreview = () => {
   const layerOffset = useBrickStore((state) => state.layerOffset);
   const placedBricks = useBrickStore((state) => state.placedBricks);
   const connectionPointIndex = useBrickStore((state) => state.connectionPointIndex);
+  const deleteMode = useBrickStore((state) => state.deleteMode);
 
   const width = (selectedBrickType?.studsX ?? 1) * STUD_SPACING;
   const depth = (selectedBrickType?.studsZ ?? 1) * STUD_SPACING;
@@ -45,6 +46,7 @@ export const BrickPreview = () => {
 
   // Calculate preview position and validity
   const previewData = useMemo(() => {
+    if (deleteMode) return null;
     if (!raycastHit || !selectedBrickType) return null;
 
     const targetX = raycastHit.position[0];
@@ -187,7 +189,7 @@ export const BrickPreview = () => {
         (!candidateAabb || !checkCollisionWithStuds(candidateAabb, 'up', placedBricks)) &&
         !checkSideStudCollision(candidate, placedBricks),
     };
-  }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height, connectionPointIndex]);
+  }, [deleteMode, raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height, connectionPointIndex]);
 
   const bodyGeometry = useMemo(() => {
     if (!selectedBrickType) return null;
