@@ -84,11 +84,13 @@ function App() {
   useEffect(() => {
     const pause = () => {
       pauseMusic();
-      suspendExistingAudioContext();
+      void suspendExistingAudioContext();
     };
     const resume = () => {
-      resumeExistingAudioContext();
-      resumeMusicIfPossible();
+      void (async () => {
+        await resumeExistingAudioContext();
+        resumeMusicIfPossible();
+      })();
     };
 
     const onVisibility = () => {
@@ -100,11 +102,17 @@ function App() {
     window.addEventListener('pagehide', pause);
     window.addEventListener('blur', pause);
     window.addEventListener('focus', resume);
+
+    // Cordova/Capacitor lifecycle events (safe no-ops in the browser).
+    (document as unknown as { addEventListener: (t: string, l: () => void) => void }).addEventListener('pause', pause);
+    (document as unknown as { addEventListener: (t: string, l: () => void) => void }).addEventListener('resume', resume);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', pause);
       window.removeEventListener('blur', pause);
       window.removeEventListener('focus', resume);
+      (document as unknown as { removeEventListener: (t: string, l: () => void) => void }).removeEventListener('pause', pause);
+      (document as unknown as { removeEventListener: (t: string, l: () => void) => void }).removeEventListener('resume', resume);
     };
   }, []);
 
