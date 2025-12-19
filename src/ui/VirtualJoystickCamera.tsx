@@ -2,9 +2,16 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { useBrickStore } from '../store/useBrickStore';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
-const JOYSTICK_SIZE = 100;
-const KNOB_SIZE = 40;
-const MAX_DISTANCE = (JOYSTICK_SIZE - KNOB_SIZE) / 2;
+const getJoystickLayout = () => {
+  if (typeof window === 'undefined') {
+    return { joystickSize: 100, knobSize: 40, buttonSizeClass: 'w-11 h-11', iconSize: 'medium' as const };
+  }
+  const minDim = Math.min(window.innerWidth, window.innerHeight);
+  const isTablet = minDim >= 700;
+  return isTablet
+    ? { joystickSize: 140, knobSize: 56, buttonSizeClass: 'w-14 h-14', iconSize: 'large' as const }
+    : { joystickSize: 100, knobSize: 40, buttonSizeClass: 'w-11 h-11', iconSize: 'medium' as const };
+};
 
 export const VirtualJoystickCamera = () => {
   const setVirtualJoystickCamera = useBrickStore((state) => state.setVirtualJoystickCamera);
@@ -12,8 +19,24 @@ export const VirtualJoystickCamera = () => {
   const uiControlsDisabled = useBrickStore((state) => state.uiControlsDisabled);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [layout, setLayout] = useState(getJoystickLayout);
   const touchIdRef = useRef<number | null>(null);
   const baseRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const update = () => setLayout(getJoystickLayout());
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+      window.visualViewport?.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('scroll', update);
+    };
+  }, []);
 
   useEffect(() => {
     if (uiControlsDisabled) {
@@ -24,6 +47,8 @@ export const VirtualJoystickCamera = () => {
       setVirtualDescend(false);
       return;
     }
+
+    const MAX_DISTANCE = (layout.joystickSize - layout.knobSize) / 2;
 
     const handleTouchStart = (e: TouchEvent) => {
       if (touchIdRef.current !== null) return;
@@ -38,7 +63,7 @@ export const VirtualJoystickCamera = () => {
         const dy = touch.clientY - centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance <= JOYSTICK_SIZE / 2) {
+        if (distance <= layout.joystickSize / 2) {
           touchIdRef.current = touch.identifier;
           setIsDragging(true);
           updatePosition(touch.clientX, touch.clientY);
@@ -102,7 +127,7 @@ export const VirtualJoystickCamera = () => {
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [setVirtualDescend, setVirtualJoystickCamera, uiControlsDisabled]);
+  }, [layout.joystickSize, layout.knobSize, setVirtualDescend, setVirtualJoystickCamera, uiControlsDisabled]);
 
   const handleDescendDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (uiControlsDisabled) return;
@@ -120,33 +145,34 @@ export const VirtualJoystickCamera = () => {
 
   return (
     <div
-      className={`fixed bottom-20 ui-safe-right z-20 pointer-events-none select-none flex flex-col items-end ${uiControlsDisabled ? 'opacity-40' : ''}`}
+      className={`fixed ui-safe-right z-20 pointer-events-none select-none flex flex-col items-end ${uiControlsDisabled ? 'opacity-40' : ''}`}
+      style={{ bottom: 'calc(5rem + var(--app-bottom-inset, 0px))' }}
     >
       <button
         onPointerDown={handleDescendDown}
         onPointerUp={handleDescendUp}
         onPointerCancel={handleDescendUp}
         disabled={uiControlsDisabled}
-        className={`pointer-events-auto mb-2 w-11 h-11 rounded-full bg-gray-800/70 border-2 border-gray-600 text-white shadow-lg flex items-center justify-center touch-manipulation ${uiControlsDisabled ? 'cursor-not-allowed' : 'active:scale-95'}`}
+        className={`pointer-events-auto mb-2 ${layout.buttonSizeClass} rounded-full bg-gray-800/70 border-2 border-gray-600 text-white shadow-lg flex items-center justify-center touch-manipulation ${uiControlsDisabled ? 'cursor-not-allowed' : 'active:scale-95'}`}
         title="Descend"
       >
-        <KeyboardArrowDownIcon fontSize="medium" />
+        <KeyboardArrowDownIcon fontSize={layout.iconSize} />
       </button>
 
       <div
         ref={baseRef}
         className={`relative ${uiControlsDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
         style={{
-          width: `${JOYSTICK_SIZE}px`,
-          height: `${JOYSTICK_SIZE}px`,
+          width: `${layout.joystickSize}px`,
+          height: `${layout.joystickSize}px`,
         }}
       >
         {/* Base circle */}
         <div
           className="absolute inset-0 rounded-full bg-gray-700/50 border-2 border-gray-500/50"
           style={{
-            width: `${JOYSTICK_SIZE}px`,
-            height: `${JOYSTICK_SIZE}px`,
+            width: `${layout.joystickSize}px`,
+            height: `${layout.joystickSize}px`,
           }}
         />
 
@@ -156,10 +182,10 @@ export const VirtualJoystickCamera = () => {
             isDragging ? 'bg-purple-500/80 scale-110' : 'bg-purple-400/60'
           }`}
           style={{
-            width: `${KNOB_SIZE}px`,
-            height: `${KNOB_SIZE}px`,
-            left: `${JOYSTICK_SIZE / 2 - KNOB_SIZE / 2 + position.x}px`,
-            top: `${JOYSTICK_SIZE / 2 - KNOB_SIZE / 2 + position.y}px`,
+            width: `${layout.knobSize}px`,
+            height: `${layout.knobSize}px`,
+            left: `${layout.joystickSize / 2 - layout.knobSize / 2 + position.x}px`,
+            top: `${layout.joystickSize / 2 - layout.knobSize / 2 + position.y}px`,
             boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}
         />

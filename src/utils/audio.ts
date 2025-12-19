@@ -20,6 +20,22 @@ const getDeviceScale = () => {
 
 export const getExistingAudioContext = (): AudioContextLike | null => audioContext;
 
+export const suspendExistingAudioContext = () => {
+  if (!audioContext) return;
+  if (audioContext.state !== 'running') return;
+  void audioContext.suspend().catch(() => {
+    // ignore
+  });
+};
+
+export const resumeExistingAudioContext = () => {
+  if (!audioContext) return;
+  if (audioContext.state !== 'suspended') return;
+  void audioContext.resume().catch(() => {
+    // ignore
+  });
+};
+
 export const getAudioContext = (): AudioContextLike | null => {
   if (typeof window === 'undefined') return null;
   const Ctx =

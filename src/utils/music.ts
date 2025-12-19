@@ -250,6 +250,16 @@ export const ensureRunning = () => {
   }, 120);
 };
 
+export const pauseMusic = () => {
+  fadeOut();
+};
+
+export const resumeMusicIfPossible = () => {
+  const ctx = getExistingAudioContext();
+  if (!ctx || ctx.state !== 'running') return;
+  ensureRunning();
+};
+
 // Call once to attach a "first gesture" retry, so music starts cleanly on mobile browsers.
 export const installMusicAutostart = () => {
   if (typeof window === 'undefined') return;

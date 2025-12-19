@@ -154,7 +154,10 @@ export const BottomBar = () => {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+      <div
+        className="fixed left-0 right-0 z-40 pointer-events-none"
+        style={{ bottom: 'var(--app-bottom-inset, 0px)' }}
+      >
         <div className={`max-w-full mx-auto px-2 sm:px-4 ui-safe-x ${isCompactHeight ? 'py-1' : 'py-2'} sm:py-3`}>
           <div className={`flex items-center justify-center ${isCompactHeight ? 'gap-1.5' : 'gap-1'} sm:gap-4`}>
           {/* Brick Picker */}
