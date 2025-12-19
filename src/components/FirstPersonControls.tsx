@@ -2,13 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
-import { getBrickBounds } from '../utils/collision';
-import { getBrickType, getBrickHeight, STUD_SPACING, type PlacedBrick } from '../types/brick';
+import { checkAabbCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
+import {
+  getBrickType,
+  getBrickHeight,
+  STUD_SPACING,
+  SIDE_STUD_POS_X,
+  SIDE_STUD_POS_Z,
+  SIDE_STUD_NEG_X,
+  SIDE_STUD_NEG_Z,
+  type PlacedBrick
+} from '../types/brick';
 import { getLayerPosition, snapToGrid } from '../utils/snapToGrid';
 import { v4 as uuidv4 } from 'uuid';
 import { playSfx } from '../utils/sfx';
 import { findNearestLocalPoint, getBottomConnectionPoints, getSelectedConnectionPoint, getTopStudPoints } from '../utils/connectionPoints';
 import { rotatePoint } from '../utils/math';
+import { getBrickQuaternion, normalToOrientation } from '../utils/brickTransform';
 
 const MOVEMENT_SPEED = 5;
 const FAST_MOVEMENT_MULTIPLIER = 2;
@@ -88,14 +98,96 @@ export const FirstPersonControls = () => {
     let targetX = raycastHit.position[0];
     let targetZ = raycastHit.position[2];
 
+    const selection = getSelectedConnectionPoint(selectedBrickType, state.connectionPointIndex);
+    if (!selection) return false;
+
+    // SNOT side-stud snapping: attach to side studs on special bricks (1x1 SNOT variants for now).
+    if (raycastHit.hitBrick && raycastHit.isTopFace === false && !raycastHit.hitGround) {
+      const hitBrick = raycastHit.hitBrick;
+      const hitBrickType = getBrickType(hitBrick.typeId);
+      const mask = hitBrickType?.sideStudMask ?? 0;
+
+      const nx = raycastHit.normal[0];
+      const nz = raycastHit.normal[2];
+      const ax = Math.abs(nx);
+      const az = Math.abs(nz);
+
+      if (
+        hitBrickType &&
+        mask !== 0 &&
+        (ax > 0.7 || az > 0.7) &&
+        selection.plane === 'bottom' &&
+        selectedBrickType.variant !== 'slope' &&
+        selectedBrickType.variant !== 'corner-slope'
+      ) {
+        // Map the hit normal into the hit brick's local space (Y-rotation only).
+        const [lnx, lnz] = rotatePoint(nx, nz, -hitBrick.rotation);
+        const localFaceBit =
+          Math.abs(lnx) > Math.abs(lnz)
+            ? (lnx > 0 ? SIDE_STUD_POS_X : SIDE_STUD_NEG_X)
+            : (lnz > 0 ? SIDE_STUD_POS_Z : SIDE_STUD_NEG_Z);
+
+        if (mask & localFaceBit) {
+          const hitWidth = hitBrickType.studsX * STUD_SPACING;
+          const hitDepth = hitBrickType.studsZ * STUD_SPACING;
+          const localStud = (() => {
+            if (localFaceBit === SIDE_STUD_POS_X) return [hitWidth / 2, 0, 0] as const;
+            if (localFaceBit === SIDE_STUD_NEG_X) return [-hitWidth / 2, 0, 0] as const;
+            if (localFaceBit === SIDE_STUD_POS_Z) return [0, 0, hitDepth / 2] as const;
+            return [0, 0, -hitDepth / 2] as const;
+          })();
+
+          const [rx, rz] = rotatePoint(localStud[0], localStud[2], hitBrick.rotation);
+          const targetPoint: [number, number, number] = [
+            hitBrick.position[0] + rx,
+            hitBrick.position[1],
+            hitBrick.position[2] + rz
+          ];
+
+          const height = getBrickHeight(selectedBrickType.variant);
+          const orientation = normalToOrientation([nx, raycastHit.normal[1], nz]);
+          const quat = getBrickQuaternion(orientation, state.rotation);
+          const localPoint = new THREE.Vector3(selection.local[0], -height / 2, selection.local[1]);
+          const worldOffset = localPoint.applyQuaternion(quat);
+          const center: [number, number, number] = [
+            targetPoint[0] - worldOffset.x,
+            targetPoint[1] - worldOffset.y,
+            targetPoint[2] - worldOffset.z
+          ];
+
+          const candidateAabb = getBrickAabb({
+            id: 'candidate',
+            typeId: selectedBrickType.id,
+            position: center,
+            color: effectiveColor,
+            rotation: state.rotation,
+            orientation
+          });
+
+          if (!candidateAabb) return false;
+          if (checkAabbCollision(candidateAabb, state.placedBricks)) return false;
+
+          state.addBrick({
+            id: uuidv4(),
+            typeId: selectedBrickType.id,
+            position: center,
+            color: effectiveColor,
+            rotation: state.rotation,
+            orientation
+          });
+
+          playSfx('place');
+          state.addToRecentBricks(selectedBrickType);
+          return true;
+        }
+      }
+    }
+
     if (raycastHit.isTopFace === false && !raycastHit.hitGround) {
       const offsetDistance = STUD_SPACING / 2;
       targetX += raycastHit.normal[0] * offsetDistance;
       targetZ += raycastHit.normal[2] * offsetDistance;
     }
-
-    const selection = getSelectedConnectionPoint(selectedBrickType, state.connectionPointIndex);
-    if (!selection) return false;
 
     let targetStudX: number;
     let targetStudZ: number;

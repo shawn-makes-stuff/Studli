@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import type { BrickType } from '../types/brick';
-import { STUD_SPACING, STUD_HEIGHT, getBrickHeight } from '../types/brick';
+import {
+  STUD_SPACING,
+  STUD_HEIGHT,
+  getBrickHeight,
+  SIDE_STUD_POS_X,
+  SIDE_STUD_POS_Z,
+  SIDE_STUD_NEG_X,
+  SIDE_STUD_NEG_Z,
+} from '../types/brick';
 import {
   getCachedSlopeGeometry,
   getCachedCornerSlopeGeometry,
@@ -96,6 +104,25 @@ const createBrickMesh = (brickType: BrickType, color: string): THREE.Group => {
     group.add(stud);
   }
 
+  // Side studs (SNOT bricks)
+  const mask = brickType.sideStudMask ?? 0;
+  if (mask) {
+    const xOut = width / 2 + STUD_HEIGHT / 2;
+    const zOut = depth / 2 + STUD_HEIGHT / 2;
+
+    const addSideStud = (pos: [number, number, number], rot: [number, number, number]) => {
+      const stud = new THREE.Mesh(studGeometry, studMaterial);
+      stud.position.set(pos[0], pos[1], pos[2]);
+      stud.rotation.set(rot[0], rot[1], rot[2]);
+      group.add(stud);
+    };
+
+    if (mask & SIDE_STUD_POS_X) addSideStud([xOut, 0, 0], [0, 0, -Math.PI / 2]);
+    if (mask & SIDE_STUD_NEG_X) addSideStud([-xOut, 0, 0], [0, 0, Math.PI / 2]);
+    if (mask & SIDE_STUD_POS_Z) addSideStud([0, 0, zOut], [Math.PI / 2, 0, 0]);
+    if (mask & SIDE_STUD_NEG_Z) addSideStud([0, 0, -zOut], [-Math.PI / 2, 0, 0]);
+  }
+
   const maxDim = Math.max(width, depth, height);
   const scale = 1.8 / maxDim;
   group.scale.setScalar(scale);
@@ -145,4 +172,3 @@ export const renderBrickThumbnailDataUrl = (
 export const clearThumbnailCache = () => {
   thumbnailCache.clear();
 };
-

@@ -6,6 +6,14 @@ export const BRICK_HEIGHT = 1.2;
 export const PLATE_HEIGHT = 0.4; // 1/3 of brick height
 export const TILE_HEIGHT = 0.4; // Same as plate but no studs
 
+export type BrickOrientation = 'up' | 'down' | 'posX' | 'negX' | 'posZ' | 'negZ';
+export const DEFAULT_BRICK_ORIENTATION: BrickOrientation = 'up';
+
+export const SIDE_STUD_POS_X = 1 << 0;
+export const SIDE_STUD_POS_Z = 1 << 1;
+export const SIDE_STUD_NEG_X = 1 << 2;
+export const SIDE_STUD_NEG_Z = 1 << 3;
+
 export type BrickVariant = 'brick' | 'plate' | 'tile' | 'slope' | 'corner-slope';
 
 export interface BrickType {
@@ -17,6 +25,7 @@ export interface BrickType {
   color: string;
   isRound?: boolean;
   isInverted?: boolean;
+  sideStudMask?: number; // bitmask of SIDE_STUD_* (local +X/+Z/-X/-Z), used by SNOT bricks
 }
 
 export interface PlacedBrick {
@@ -25,11 +34,16 @@ export interface PlacedBrick {
   position: [number, number, number];
   color: string;
   rotation: number;
+  orientation?: BrickOrientation; // default: 'up'
 }
 
 // Available brick types
 const BRICKS: BrickType[] = [
   { id: '1x1-brick', name: '1x1 Brick', studsX: 1, studsZ: 1, variant: 'brick', color: '#e53935' },
+  { id: '1x1-snot-1', name: '1x1 SNOT Brick (1 side)', studsX: 1, studsZ: 1, variant: 'brick', color: '#e53935', sideStudMask: SIDE_STUD_POS_X },
+  { id: '1x1-snot-2', name: '1x1 SNOT Brick (2 sides)', studsX: 1, studsZ: 1, variant: 'brick', color: '#e53935', sideStudMask: SIDE_STUD_POS_X | SIDE_STUD_POS_Z },
+  { id: '1x1-snot-3', name: '1x1 SNOT Brick (3 sides)', studsX: 1, studsZ: 1, variant: 'brick', color: '#e53935', sideStudMask: SIDE_STUD_POS_X | SIDE_STUD_POS_Z | SIDE_STUD_NEG_X },
+  { id: '1x1-snot-4', name: '1x1 SNOT Brick (4 sides)', studsX: 1, studsZ: 1, variant: 'brick', color: '#e53935', sideStudMask: SIDE_STUD_POS_X | SIDE_STUD_POS_Z | SIDE_STUD_NEG_X | SIDE_STUD_NEG_Z },
   { id: '1x2-brick', name: '1x2 Brick', studsX: 1, studsZ: 2, variant: 'brick', color: '#d32f2f' },
   { id: '1x3-brick', name: '1x3 Brick', studsX: 1, studsZ: 3, variant: 'brick', color: '#c62828' },
   { id: '1x4-brick', name: '1x4 Brick', studsX: 1, studsZ: 4, variant: 'brick', color: '#b71c1c' },

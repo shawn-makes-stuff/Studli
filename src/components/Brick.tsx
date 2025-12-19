@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import {
   STUD_SPACING,
   STUD_HEIGHT,
+  SIDE_STUD_POS_X,
+  SIDE_STUD_POS_Z,
+  SIDE_STUD_NEG_X,
+  SIDE_STUD_NEG_Z,
   getBrickType,
   getBrickHeight,
   PlacedBrick
@@ -17,6 +21,7 @@ import {
   getCachedSlopeGeometry,
   getStudGeometry
 } from '../utils/geometry';
+import { getBrickQuaternion } from '../utils/brickTransform';
 
 interface BrickProps {
   brick: PlacedBrick;
@@ -79,23 +84,52 @@ export const Brick = ({ brick }: BrickProps) => {
     return calculateStudPositions(brickType.studsX, brickType.studsZ, depth, brickType.variant, isInverted);
   }, [brickType.studsX, brickType.studsZ, depth, brickType.variant, isInverted]);
 
+  const sideStuds = useMemo(() => {
+    const mask = brickType.sideStudMask ?? 0;
+    if (mask === 0) return [] as Array<{ position: [number, number, number]; rotation: [number, number, number] }>;
+
+    const studs: Array<{ position: [number, number, number]; rotation: [number, number, number] }> = [];
+    const xOut = width / 2 + STUD_HEIGHT / 2;
+    const zOut = depth / 2 + STUD_HEIGHT / 2;
+
+    if (mask & SIDE_STUD_POS_X) studs.push({ position: [xOut, 0, 0], rotation: [0, 0, -Math.PI / 2] });
+    if (mask & SIDE_STUD_NEG_X) studs.push({ position: [-xOut, 0, 0], rotation: [0, 0, Math.PI / 2] });
+    if (mask & SIDE_STUD_POS_Z) studs.push({ position: [0, 0, zOut], rotation: [Math.PI / 2, 0, 0] });
+    if (mask & SIDE_STUD_NEG_Z) studs.push({ position: [0, 0, -zOut], rotation: [-Math.PI / 2, 0, 0] });
+
+    return studs;
+  }, [brickType.sideStudMask, depth, width]);
+
+  const totalStudCount = studPositions.length + sideStuds.length;
+
   // Keep stud instances in a single draw call
   useEffect(() => {
     const studs = studsRef.current;
     if (!studs) return;
 
     const dummy = new THREE.Object3D();
-    for (let i = 0; i < studPositions.length; i++) {
-      const [x, z] = studPositions[i];
+    let idx = 0;
+
+    for (const [x, z] of studPositions) {
       dummy.position.set(x, height / 2 + STUD_HEIGHT / 2, z);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
-      studs.setMatrixAt(i, dummy.matrix);
+      studs.setMatrixAt(idx++, dummy.matrix);
+    }
+
+    for (const s of sideStuds) {
+      dummy.position.set(s.position[0], s.position[1], s.position[2]);
+      dummy.rotation.set(s.rotation[0], s.rotation[1], s.rotation[2]);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      studs.setMatrixAt(idx++, dummy.matrix);
     }
 
     studs.instanceMatrix.needsUpdate = true;
-  }, [height, studPositions]);
+  }, [height, sideStuds, studPositions]);
+
+  const brickQuat = useMemo(() => getBrickQuaternion(brick.orientation, brick.rotation), [brick.orientation, brick.rotation]);
 
   // Register this brick's expensive "detail" group so we can distance-cull it globally.
   useEffect(() => {
@@ -109,7 +143,7 @@ export const Brick = ({ brick }: BrickProps) => {
   return (
     <group
       position={brick.position}
-      rotation={[0, brick.rotation * Math.PI / 2, 0]}
+      quaternion={brickQuat}
       userData={{ placedBrick: brick }}
     >
       {/* Main brick body */}
@@ -151,10 +185,10 @@ export const Brick = ({ brick }: BrickProps) => {
           )}
 
           {/* Studs (instanced) */}
-          {studPositions.length > 0 && (
+          {totalStudCount > 0 && (
             <instancedMesh
               ref={studsRef}
-              args={[studGeometry, undefined, studPositions.length]}
+              args={[studGeometry, undefined, totalStudCount]}
               userData={{ isStud: true }}
               raycast={() => null}
             >

@@ -1,5 +1,6 @@
-import { STUD_SPACING, getBrickType, getBrickHeight, PlacedBrick, hasStuds } from '../types/brick';
+import { STUD_SPACING, getBrickType, PlacedBrick, hasStuds } from '../types/brick';
 import { rotatePoint } from './math';
+import { getBrickBounds } from './collision';
 
 /**
  * Gets the effective dimensions considering rotation (for collision/snapping)
@@ -270,27 +271,23 @@ const getOverlappingBricks = (
     const brickType = getBrickType(brick.typeId);
     if (!brickType) continue;
 
-    const brickFootprint = getBrickFootprint(
-      brick.position[0],
-      brick.position[2],
-      brickType.studsX,
-      brickType.studsZ,
-      brick.rotation
-    );
+    const bounds3d = getBrickBounds(brick);
+    if (!bounds3d) continue;
+    const brickFootprint = bounds3d.footprint;
 
     if (footprintsOverlap(newBrickFootprint, brickFootprint)) {
-      const brickHeight = getBrickHeight(brickType.variant);
       const isSlope = brickType.variant === 'slope';
+      const providesStuds = hasStuds(brickType.variant) && (brick.orientation ?? 'up') === 'up';
 
       const bounds: BrickBounds = {
         footprint: brickFootprint,
-        bottomY: brick.position[1] - brickHeight / 2,
-        topY: brick.position[1] + brickHeight / 2,
-        hasStuds: hasStuds(brickType.variant)
+        bottomY: bounds3d.bottomY,
+        topY: bounds3d.topY,
+        hasStuds: providesStuds
       };
 
       // For slopes and corner slopes, also track where studs actually are
-      if (isSlope || brickType.variant === 'corner-slope') {
+      if (providesStuds && (isSlope || brickType.variant === 'corner-slope')) {
         bounds.studFootprint = getStudFootprint(
           brick.position[0],
           brick.position[2],
@@ -330,19 +327,13 @@ const wouldCollide = (
     const brickType = getBrickType(brick.typeId);
     if (!brickType) continue;
 
-    const brickFootprint = getBrickFootprint(
-      brick.position[0],
-      brick.position[2],
-      brickType.studsX,
-      brickType.studsZ,
-      brick.rotation
-    );
+    const bounds3d = getBrickBounds(brick);
+    if (!bounds3d) continue;
+    const brickFootprint = bounds3d.footprint;
 
     if (!footprintsOverlap(newBrickFootprint, brickFootprint)) continue;
-
-    const brickHeight = getBrickHeight(brickType.variant);
-    const brickBottomY = brick.position[1] - brickHeight / 2;
-    const brickTopY = brick.position[1] + brickHeight / 2;
+    const brickBottomY = bounds3d.bottomY;
+    const brickTopY = bounds3d.topY;
 
     // Check Y overlap - this applies to ALL bricks including tiles
     const overlapY = bottomY < brickTopY - epsilon && topY > brickBottomY + epsilon;
@@ -395,22 +386,17 @@ const isConnected = (
     const brickType = getBrickType(brick.typeId);
     if (!brickType) continue;
 
-    const brickFootprint = getBrickFootprint(
-      brick.position[0],
-      brick.position[2],
-      brickType.studsX,
-      brickType.studsZ,
-      brick.rotation
-    );
+    const bounds3d = getBrickBounds(brick);
+    if (!bounds3d) continue;
+    const brickFootprint = bounds3d.footprint;
 
     if (!footprintsOverlap(newBrickFootprint, brickFootprint)) continue;
-
-    const brickHeight = getBrickHeight(brickType.variant);
-    const brickBottomY = brick.position[1] - brickHeight / 2;
-    const brickTopY = brick.position[1] + brickHeight / 2;
+    const brickBottomY = bounds3d.bottomY;
+    const brickTopY = bounds3d.topY;
+    const providesStuds = hasStuds(brickType.variant) && (brick.orientation ?? 'up') === 'up';
 
     // Connected from below - only valid if the brick has studs
-    if (Math.abs(bottomY - brickTopY) < epsilon && hasStuds(brickType.variant)) {
+    if (Math.abs(bottomY - brickTopY) < epsilon && providesStuds) {
       // For slopes and corner slopes, check if new brick overlaps with stud footprint
       if (brickType.variant === 'slope' || brickType.variant === 'corner-slope') {
         const studFootprint = getStudFootprint(
@@ -525,18 +511,12 @@ export const calculateStackHeight = (
     const brickType = getBrickType(brick.typeId);
     if (!brickType) continue;
 
-    const brickFootprint = getBrickFootprint(
-      brick.position[0],
-      brick.position[2],
-      brickType.studsX,
-      brickType.studsZ,
-      brick.rotation
-    );
+    const bounds3d = getBrickBounds(brick);
+    if (!bounds3d) continue;
+    const brickFootprint = bounds3d.footprint;
 
     if (footprintsOverlap(newBrickFootprint, brickFootprint)) {
-      const brickHeight = getBrickHeight(brickType.variant);
-      const topOfBrick = brick.position[1] + brickHeight / 2;
-      maxHeight = Math.max(maxHeight, topOfBrick);
+      maxHeight = Math.max(maxHeight, bounds3d.topY);
     }
   }
 
