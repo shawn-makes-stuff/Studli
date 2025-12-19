@@ -83,13 +83,11 @@ export const BottomBar = () => {
     const next = !showColorPopout;
     setShowColorPopout(next);
     if (next) {
-      if (!readBrickPickerPinned()) {
-        setShowBrickPicker(false);
-      }
-    } else {
-      if (readBrickPickerPinned()) {
-        setShowBrickPicker(true);
-      }
+      // Only allow Esc to (re)capture the mouse while the brick picker is open,
+      // so close the picker while color picker is open (restore afterward if pinned).
+      setShowBrickPicker(false);
+    } else if (readBrickPickerPinned()) {
+      setShowBrickPicker(true);
     }
   };
 
