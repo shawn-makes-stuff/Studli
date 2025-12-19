@@ -279,6 +279,7 @@ export const FirstPersonControls = () => {
 
       switch (event.code) {
         case 'KeyX':
+        case 'Delete':
           if (!isTouchDevice && !allowDesktopMovement) return;
           if (allowDesktopMovement) event.preventDefault();
           useBrickStore.getState().toggleDeleteMode();
