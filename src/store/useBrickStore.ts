@@ -12,6 +12,7 @@ type SettingsState = {
   musicVolume: number; // 0..1
   joystickMoveSensitivity: number; // multiplier
   joystickLookSensitivity: number; // multiplier
+  quality: 'low' | 'medium' | 'high';
 };
 
 const SETTINGS_STORAGE_KEY = 'studli_settings_v1';
@@ -37,6 +38,11 @@ export type SavedProject = {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+const normalizeQuality = (value: unknown): SettingsState['quality'] => {
+  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  return 'medium';
+};
+
 const readSettings = (): SettingsState => {
   if (typeof window === 'undefined') {
     return {
@@ -46,6 +52,7 @@ const readSettings = (): SettingsState => {
       musicVolume: 0.5,
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
+      quality: 'medium',
     };
   }
 
@@ -59,6 +66,7 @@ const readSettings = (): SettingsState => {
         musicVolume: 0.5,
         joystickMoveSensitivity: 1.0,
         joystickLookSensitivity: 1.0,
+        quality: 'medium',
       };
     }
 
@@ -75,6 +83,7 @@ const readSettings = (): SettingsState => {
       musicVolume: clamp(parsed?.musicVolume ?? 0.5, 0, 1),
       joystickMoveSensitivity: clamp(parsed?.joystickMoveSensitivity ?? 1.0, 0.4, 2.0),
       joystickLookSensitivity: clamp(parsed?.joystickLookSensitivity ?? 1.0, 0.4, 2.0),
+      quality: normalizeQuality((parsed as Record<string, unknown> | null)?.quality),
     };
   } catch {
     return {
@@ -84,6 +93,7 @@ const readSettings = (): SettingsState => {
       musicVolume: 0.5,
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
+      quality: 'medium',
     };
   }
 };
@@ -185,6 +195,7 @@ interface BrickStore {
   setMusicVolume: (volume: number) => void;
   setJoystickMoveSensitivity: (sensitivity: number) => void;
   setJoystickLookSensitivity: (sensitivity: number) => void;
+  setQuality: (quality: SettingsState['quality']) => void;
   setUiPopoverOpen: (open: boolean) => void;
   setUiPopoverType: (type: BrickStore['uiPopoverType']) => void;
 
@@ -401,6 +412,16 @@ export const useBrickStore = create<BrickStore>((set) => ({
       const settings = {
         ...state.settings,
         joystickLookSensitivity: clamp(sensitivity, 0.4, 2.0),
+      };
+      writeSettings(settings);
+      return { settings };
+    }),
+
+  setQuality: (quality) =>
+    set((state) => {
+      const settings = {
+        ...state.settings,
+        quality: normalizeQuality(quality),
       };
       writeSettings(settings);
       return { settings };

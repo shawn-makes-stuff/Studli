@@ -9,6 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import TuneIcon from '@mui/icons-material/Tune';
+import HighQualityIcon from '@mui/icons-material/HighQuality';
 import { useBrickStore } from '../store/useBrickStore';
 import { playSfx } from '../utils/sfx';
 
@@ -38,6 +39,7 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
   const setMusicVolume = useBrickStore((state) => state.setMusicVolume);
   const setJoystickMoveSensitivity = useBrickStore((state) => state.setJoystickMoveSensitivity);
   const setJoystickLookSensitivity = useBrickStore((state) => state.setJoystickLookSensitivity);
+  const setQuality = useBrickStore((state) => state.setQuality);
 
   const [view, setView] = useState<MenuView>('main');
   const [notice, setNotice] = useState<string | null>(null);
@@ -288,6 +290,37 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
                       className="w-full"
                     />
                     <div className="text-[11px] text-gray-400">Plays after the first tap/click (browser audio rules).</div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                      <HighQualityIcon fontSize="small" />
+                      Quality
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(['low', 'medium', 'high'] as const).map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => {
+                            playSfx('click');
+                            setQuality(q);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                            settings.quality === q
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-gray-900 border-gray-700 text-gray-200 hover:bg-gray-800'
+                          }`}
+                          title={q}
+                        >
+                          {q.charAt(0).toUpperCase() + q.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-gray-400">
+                    Lower quality improves performance on slower devices.
                   </div>
                 </div>
 

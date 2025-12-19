@@ -26,9 +26,10 @@ import { getBrickQuaternion } from '../utils/brickTransform';
 interface BrickProps {
   brick: PlacedBrick;
   isDeleteSelected?: boolean;
+  quality?: 'low' | 'medium' | 'high';
 }
 
-export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
+export const Brick = ({ brick, isDeleteSelected, quality }: BrickProps) => {
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
 
@@ -78,9 +79,10 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
   const bodyGeometry = slopeGeometry ?? cornerSlopeGeometry ?? roundedRectGeometry ?? boxGeometry;
 
   const cavityEdgesGeometry = useMemo(() => {
+    if (quality === 'low') return null;
     if (!bodyGeometry) return null;
     return getCachedEdgesGeometry(bodyGeometryKey, bodyGeometry);
-  }, [bodyGeometry, bodyGeometryKey]);
+  }, [bodyGeometry, bodyGeometryKey, quality]);
 
   const studGeometry = useMemo(() => getStudGeometry(), []);
 

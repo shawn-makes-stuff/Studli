@@ -11,13 +11,14 @@ const BrickLayer = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
   const deleteMode = useBrickStore((state) => state.deleteMode);
   const deleteSelectionIds = useBrickStore((state) => state.deleteSelectionIds);
+  const quality = useBrickStore((state) => state.settings.quality);
 
   const deleteSet = useMemo(() => new Set(deleteSelectionIds), [deleteSelectionIds]);
 
   return (
     <>
       {placedBricks.map((brick) => (
-        <Brick key={brick.id} brick={brick} isDeleteSelected={deleteMode && deleteSet.has(brick.id)} />
+        <Brick key={brick.id} brick={brick} quality={quality} isDeleteSelected={deleteMode && deleteSet.has(brick.id)} />
       ))}
     </>
   );
@@ -29,6 +30,7 @@ export const Scene = () => {
   const redo = useBrickStore((state) => state.redo);
   const menuOpen = useBrickStore((state) => state.menuOpen);
   const deleteMode = useBrickStore((state) => state.deleteMode);
+  const quality = useBrickStore((state) => state.settings.quality);
 
   const isTouchDevice = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -39,9 +41,26 @@ export const Scene = () => {
     if (typeof window === 'undefined') return 1;
     const base = window.devicePixelRatio || 1;
     const minDim = Math.min(window.innerWidth, window.innerHeight);
-    const cap = isTouchDevice ? (minDim >= 700 ? 1.15 : 1.25) : 2;
+    const cap = (() => {
+      if (quality === 'low') return isTouchDevice ? 1.0 : 1.25;
+      if (quality === 'high') return isTouchDevice ? (minDim >= 700 ? 1.5 : 1.65) : 2;
+      // medium
+      return isTouchDevice ? (minDim >= 700 ? 1.15 : 1.25) : 2;
+    })();
     return Math.max(1, Math.min(base, cap));
-  }, [isTouchDevice]);
+  }, [isTouchDevice, quality]);
+
+  const enableShadows = useMemo(() => {
+    if (quality === 'low') return false;
+    if (quality === 'high') return true;
+    return !isTouchDevice;
+  }, [isTouchDevice, quality]);
+
+  const enableAntialias = useMemo(() => {
+    if (quality === 'low') return false;
+    if (quality === 'high') return true;
+    return !isTouchDevice;
+  }, [isTouchDevice, quality]);
 
   // Keyboard controls
   useEffect(() => {
@@ -80,13 +99,13 @@ export const Scene = () => {
 
   return (
     <Canvas
-      shadows={!isTouchDevice}
+      shadows={enableShadows}
       camera={{ position: [0, 8, 15], fov: 70 }}
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       dpr={dpr}
       gl={{
         alpha: false,
-        antialias: !isTouchDevice,
+        antialias: enableAntialias,
         powerPreference: 'high-performance',
       }}
       onContextMenu={(e) => e.preventDefault()}
@@ -95,8 +114,8 @@ export const Scene = () => {
       <directionalLight
         position={[10, 20, 10]}
         intensity={1}
-        castShadow={!isTouchDevice}
-        shadow-mapSize={isTouchDevice ? [1024, 1024] : [2048, 2048]}
+        castShadow={enableShadows}
+        shadow-mapSize={enableShadows ? (isTouchDevice ? [1024, 1024] : [2048, 2048]) : [1, 1]}
         shadow-camera-far={50}
         shadow-camera-left={-20}
         shadow-camera-right={20}

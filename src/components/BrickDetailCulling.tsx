@@ -2,12 +2,12 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { getBrickDetailEntries } from '../utils/renderCulling';
+import { useBrickStore } from '../store/useBrickStore';
 
 const UPDATE_INTERVAL_S = 0.15;
-const DETAILS_SHOW_DISTANCE = 80;
-const DETAILS_HIDE_DISTANCE = 95;
 
 export const BrickDetailCulling = () => {
+  const quality = useBrickStore((state) => state.settings.quality);
   const elapsedRef = useRef(0);
   const cameraPosRef = useRef(new THREE.Vector3());
 
@@ -18,8 +18,15 @@ export const BrickDetailCulling = () => {
 
     cameraPosRef.current.copy(state.camera.position);
 
-    const showDistSq = DETAILS_SHOW_DISTANCE * DETAILS_SHOW_DISTANCE;
-    const hideDistSq = DETAILS_HIDE_DISTANCE * DETAILS_HIDE_DISTANCE;
+    const [showDistance, hideDistance] =
+      quality === 'low'
+        ? [55, 68]
+        : quality === 'high'
+          ? [105, 125]
+          : [80, 95];
+
+    const showDistSq = showDistance * showDistance;
+    const hideDistSq = hideDistance * hideDistance;
 
     for (const entry of getBrickDetailEntries()) {
       const distSq = cameraPosRef.current.distanceToSquared(entry.position);
@@ -34,4 +41,3 @@ export const BrickDetailCulling = () => {
 
   return null;
 };
-
