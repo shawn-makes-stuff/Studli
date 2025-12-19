@@ -1,4 +1,4 @@
-import { getAudioContext, getEffectsGain } from './audio';
+import { getAudioContext, getEffectsGain, setEffectsBusGain } from './audio';
 
 type SfxName = 'click' | 'place';
 export type SfxConfig = { enabled: boolean; volume: number };
@@ -17,8 +17,7 @@ export const setSfxConfig = (next: SfxConfig) => {
     volume: clamp(next.volume ?? 1, 0, 1),
   };
 
-  const effectsGain = getEffectsGain();
-  if (effectsGain) effectsGain.gain.value = sfxConfig.enabled ? sfxConfig.volume : 0;
+  setEffectsBusGain(sfxConfig.enabled ? sfxConfig.volume : 0);
 };
 
 const getNoiseBuffer = (ctx: AudioContext, durationSeconds: number): AudioBuffer => {

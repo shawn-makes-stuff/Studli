@@ -1,4 +1,4 @@
-import { getAudioContext, getMusicGain } from './audio';
+import { getAudioContext, getExistingAudioContext, getMusicGain, setMusicBusGain } from './audio';
 
 export type MusicConfig = {
   enabled: boolean;
@@ -176,9 +176,7 @@ const scheduleLoop = (ctx: AudioContext, t0: number) => {
 };
 
 const updateMusicGain = () => {
-  const musicGain = getMusicGain();
-  if (!musicGain) return;
-  musicGain.gain.value = musicConfig.enabled ? clamp(musicConfig.volume, 0, 1) : 0;
+  setMusicBusGain(musicConfig.enabled ? clamp(musicConfig.volume, 0, 1) : 0);
 };
 
 const stopScheduler = () => {
@@ -197,12 +195,12 @@ export const setMusicConfig = (next: MusicConfig) => {
     return;
   }
 
-  ensureRunning();
+  const ctx = getExistingAudioContext();
+  if (ctx && ctx.state === 'running') ensureRunning();
 };
 
-const fadeIn = () => {
-  const ctx = getAudioContext();
-  if (!ctx || !internalGain) return;
+const fadeIn = (ctx: AudioContext) => {
+  if (!internalGain) return;
   const t0 = ctx.currentTime + 0.01;
   internalGain.gain.cancelScheduledValues(t0);
   internalGain.gain.setValueAtTime(internalGain.gain.value, t0);
@@ -210,7 +208,7 @@ const fadeIn = () => {
 };
 
 const fadeOut = () => {
-  const ctx = getAudioContext();
+  const ctx = getExistingAudioContext();
   if (!ctx || !internalGain) {
     stopScheduler();
     isRunning = false;
@@ -239,7 +237,7 @@ export const ensureRunning = () => {
 
   nextLoopStartTime = Math.max(ctx.currentTime + 0.08, nextLoopStartTime || 0);
   isRunning = true;
-  fadeIn();
+  fadeIn(ctx);
 
   const scheduleAheadSeconds = 1.25;
   schedulerTimer = window.setInterval(() => {

@@ -214,17 +214,15 @@ export const BrickPreview = () => {
     return calculateStudPositions(selectedBrickType.studsX, selectedBrickType.studsZ, depth, selectedBrickType.variant, isInverted);
   }, [selectedBrickType, depth, isInverted]);
 
-  // Don't render if no selection or no valid raycast
-  if (!selectedBrickType || !previewData) return null;
-
-  const effectiveColor = useDefaultColor ? selectedBrickType.color : selectedColor;
-  const previewColor = previewData.isValid ? effectiveColor : '#ff0000';
-  const opacity = previewData.isValid ? 0.6 : 0.4;
-  const previewQuat = useMemo(() => getBrickQuaternion(previewData.orientation, rotation), [previewData.orientation, rotation]);
+  const previewOrientation = previewData?.orientation ?? 'up';
+  const previewQuat = useMemo(() => getBrickQuaternion(previewOrientation, rotation), [previewOrientation, rotation]);
 
   const sideStuds = useMemo(() => {
-    const mask = selectedBrickType.sideStudMask ?? 0;
-    if (mask === 0) return [] as Array<{ position: [number, number, number]; rotation: [number, number, number] }>;
+    const mask = selectedBrickType?.sideStudMask ?? 0;
+    if (!selectedBrickType || mask === 0) {
+      return [] as Array<{ position: [number, number, number]; rotation: [number, number, number] }>;
+    }
+
     const studs: Array<{ position: [number, number, number]; rotation: [number, number, number] }> = [];
     const xOut = width / 2 + STUD_HEIGHT / 2;
     const zOut = depth / 2 + STUD_HEIGHT / 2;
@@ -233,7 +231,14 @@ export const BrickPreview = () => {
     if (mask & SIDE_STUD_POS_Z) studs.push({ position: [0, 0, zOut], rotation: [Math.PI / 2, 0, 0] });
     if (mask & SIDE_STUD_NEG_Z) studs.push({ position: [0, 0, -zOut], rotation: [-Math.PI / 2, 0, 0] });
     return studs;
-  }, [depth, selectedBrickType.sideStudMask, width]);
+  }, [depth, selectedBrickType, width]);
+
+  // Don't render if no selection or no valid raycast
+  if (!selectedBrickType || !previewData) return null;
+
+  const effectiveColor = useDefaultColor ? selectedBrickType.color : selectedColor;
+  const previewColor = previewData.isValid ? effectiveColor : '#ff0000';
+  const opacity = previewData.isValid ? 0.6 : 0.4;
 
   return (
     <group

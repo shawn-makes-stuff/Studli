@@ -8,12 +8,17 @@ let effectsGain: GainNode | null = null;
 let musicGain: GainNode | null = null;
 
 const BASE_MASTER_GAIN = 0.3;
+let desiredMasterVolume = 1; // 0..1
+let desiredEffectsVolume = 1; // 0..1 (relative to master)
+let desiredMusicVolume = 1; // 0..1 (relative to master)
 
 const getDeviceScale = () => {
   if (typeof window === 'undefined') return 1;
   const minDim = Math.min(window.innerWidth, window.innerHeight);
   return clamp(minDim / 800, 0.55, 1);
 };
+
+export const getExistingAudioContext = (): AudioContextLike | null => audioContext;
 
 export const getAudioContext = (): AudioContextLike | null => {
   if (typeof window === 'undefined') return null;
@@ -28,9 +33,9 @@ export const getAudioContext = (): AudioContextLike | null => {
     effectsGain = audioContext.createGain();
     musicGain = audioContext.createGain();
 
-    masterGain.gain.value = BASE_MASTER_GAIN * getDeviceScale();
-    effectsGain.gain.value = 1;
-    musicGain.gain.value = 1;
+    masterGain.gain.value = BASE_MASTER_GAIN * getDeviceScale() * clamp(desiredMasterVolume, 0, 1);
+    effectsGain.gain.value = clamp(desiredEffectsVolume, 0, 1);
+    musicGain.gain.value = clamp(desiredMusicVolume, 0, 1);
 
     effectsGain.connect(masterGain);
     musicGain.connect(masterGain);
@@ -47,19 +52,21 @@ export const getAudioContext = (): AudioContextLike | null => {
 };
 
 export const setMasterOutputGain = (volume: number) => {
-  const ctx = getAudioContext();
-  if (!ctx || !masterGain) return;
-  masterGain.gain.value = BASE_MASTER_GAIN * getDeviceScale() * clamp(volume, 0, 1);
+  desiredMasterVolume = clamp(volume, 0, 1);
+  if (!masterGain) return;
+  masterGain.gain.value = BASE_MASTER_GAIN * getDeviceScale() * desiredMasterVolume;
 };
 
-export const getEffectsGain = (): GainNode | null => {
-  const ctx = getAudioContext();
-  if (!ctx) return null;
-  return effectsGain;
+export const setEffectsBusGain = (volume: number) => {
+  desiredEffectsVolume = clamp(volume, 0, 1);
+  if (effectsGain) effectsGain.gain.value = desiredEffectsVolume;
 };
 
-export const getMusicGain = (): GainNode | null => {
-  const ctx = getAudioContext();
-  if (!ctx) return null;
-  return musicGain;
+export const setMusicBusGain = (volume: number) => {
+  desiredMusicVolume = clamp(volume, 0, 1);
+  if (musicGain) musicGain.gain.value = desiredMusicVolume;
 };
+
+export const getEffectsGain = (): GainNode | null => effectsGain;
+
+export const getMusicGain = (): GainNode | null => musicGain;
