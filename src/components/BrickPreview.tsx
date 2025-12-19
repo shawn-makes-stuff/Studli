@@ -12,7 +12,7 @@ import {
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
 import { getLayerPosition, snapToGrid } from '../utils/snapToGrid';
-import { checkAabbCollision, checkSideStudCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
+import { checkAabbCollision, checkCollisionWithStuds, checkSideStudCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
 import {
   getCachedBoxGeometry,
   getCachedCornerSlopeGeometry,
@@ -56,12 +56,7 @@ export const BrickPreview = () => {
     const height = getBrickHeight(selectedBrickType.variant);
 
     // Stud snapping: attach to any stud on the face you're aiming at (supports sideways/downward studs from SNOT).
-    if (
-      raycastHit.hitBrick &&
-      !raycastHit.hitGround &&
-      selectedBrickType.variant !== 'slope' &&
-      selectedBrickType.variant !== 'corner-slope'
-    ) {
+    if (raycastHit.hitBrick && !raycastHit.hitGround) {
       const hitBrick = raycastHit.hitBrick;
       const stud = findNearestStudConnectorOnFace(hitBrick, raycastHit.position, raycastHit.normal);
 
@@ -95,6 +90,7 @@ export const BrickPreview = () => {
             Boolean(candidateAabb) &&
             candidateAabb!.minY >= -0.01 &&
             !checkAabbCollision(candidateAabb!, placedBricks) &&
+            !checkCollisionWithStuds(candidateAabb!, orientation, placedBricks) &&
             !checkSideStudCollision(candidate, placedBricks);
 
           return {
@@ -181,10 +177,15 @@ export const BrickPreview = () => {
       rotation,
     };
 
+    const candidateAabb = getBrickAabb(candidate);
+
     return {
       center,
       orientation: 'up' as const,
-      isValid: result.isValid && !checkSideStudCollision(candidate, placedBricks),
+      isValid:
+        result.isValid &&
+        (!candidateAabb || !checkCollisionWithStuds(candidateAabb, 'up', placedBricks)) &&
+        !checkSideStudCollision(candidate, placedBricks),
     };
   }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height, connectionPointIndex]);
 

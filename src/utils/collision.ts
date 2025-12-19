@@ -4,10 +4,11 @@
  */
 
 import * as THREE from 'three';
-import { PlacedBrick, getBrickType, getBrickHeight, STUD_HEIGHT, STUD_RADIUS, STUD_SPACING, SIDE_STUD_NEG_X, SIDE_STUD_NEG_Z, SIDE_STUD_POS_X, SIDE_STUD_POS_Z } from '../types/brick';
+import { BrickOrientation, PlacedBrick, getBrickType, getBrickHeight, hasStuds, STUD_HEIGHT, STUD_RADIUS, STUD_SPACING, SIDE_STUD_NEG_X, SIDE_STUD_NEG_Z, SIDE_STUD_POS_X, SIDE_STUD_POS_Z } from '../types/brick';
 import { getBrickFootprint } from './snapToGrid';
 import { boxesOverlap, rangesOverlap } from './math';
-import { getBrickQuaternion } from './brickTransform';
+import { getBrickQuaternion, getUpVector } from './brickTransform';
+import { calculateStudPositions } from './studPositions';
 
 export interface BrickBounds {
   footprint: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -178,6 +179,111 @@ export const checkSideStudCollision = (brick: PlacedBrick, existingBricks: Place
     }
   }
 
+  return false;
+};
+
+type StudAabb = BrickAabb & { direction: THREE.Vector3 };
+
+const getTopStudAabbsWithDirection = (brick: PlacedBrick): StudAabb[] => {
+  const brickType = getBrickType(brick.typeId);
+  if (!brickType) return [];
+  if (!hasStuds(brickType.variant)) return [];
+
+  const height = getBrickHeight(brickType.variant);
+  const depth = brickType.studsZ * STUD_SPACING;
+
+  const localStuds = calculateStudPositions(
+    brickType.studsX,
+    brickType.studsZ,
+    depth,
+    brickType.variant,
+    brickType.isInverted ?? false,
+  );
+  if (localStuds.length === 0) return [];
+
+  const q = getBrickQuaternion(brick.orientation, brick.rotation);
+  const dir = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+  const half = new THREE.Vector3(STUD_RADIUS, STUD_HEIGHT / 2, STUD_RADIUS);
+
+  const studs: StudAabb[] = [];
+  for (const [x, z] of localStuds) {
+    const center = new THREE.Vector3(x, height / 2 + STUD_HEIGHT / 2, z);
+    const aabb = getOrientedBoxAabb(brick, center, half);
+    if (aabb) studs.push({ ...aabb, direction: dir });
+  }
+  return studs;
+};
+
+const getSideStudAabbsWithDirection = (brick: PlacedBrick): StudAabb[] => {
+  const brickType = getBrickType(brick.typeId);
+  if (!brickType) return [];
+
+  const mask = brickType.sideStudMask ?? 0;
+  if (mask === 0) return [];
+
+  const width = brickType.studsX * STUD_SPACING;
+  const depth = brickType.studsZ * STUD_SPACING;
+
+  const q = getBrickQuaternion(brick.orientation, brick.rotation);
+  const halfAlong = STUD_HEIGHT / 2;
+  const halfRad = STUD_RADIUS;
+
+  const studs: Array<{ center: THREE.Vector3; half: THREE.Vector3; dir: THREE.Vector3 }> = [];
+
+  if (mask & SIDE_STUD_POS_X) studs.push({ center: new THREE.Vector3(width / 2 + halfAlong, 0, 0), half: new THREE.Vector3(halfAlong, halfRad, halfRad), dir: new THREE.Vector3(1, 0, 0) });
+  if (mask & SIDE_STUD_NEG_X) studs.push({ center: new THREE.Vector3(-width / 2 - halfAlong, 0, 0), half: new THREE.Vector3(halfAlong, halfRad, halfRad), dir: new THREE.Vector3(-1, 0, 0) });
+  if (mask & SIDE_STUD_POS_Z) studs.push({ center: new THREE.Vector3(0, 0, depth / 2 + halfAlong), half: new THREE.Vector3(halfRad, halfRad, halfAlong), dir: new THREE.Vector3(0, 0, 1) });
+  if (mask & SIDE_STUD_NEG_Z) studs.push({ center: new THREE.Vector3(0, 0, -depth / 2 - halfAlong), half: new THREE.Vector3(halfRad, halfRad, halfAlong), dir: new THREE.Vector3(0, 0, -1) });
+
+  const aabbs: StudAabb[] = [];
+  for (const s of studs) {
+    const aabb = getOrientedBoxAabb(brick, s.center, s.half);
+    if (!aabb) continue;
+    const worldDir = s.dir.clone().applyQuaternion(q).normalize();
+    aabbs.push({ ...aabb, direction: worldDir });
+  }
+  return aabbs;
+};
+
+export const checkCollisionWithStuds = (
+  candidate: BrickAabb,
+  candidateOrientation: BrickOrientation | undefined,
+  existingBricks: PlacedBrick[],
+  excludeIds: Set<string> = new Set()
+) => {
+  const up = getUpVector(candidateOrientation).normalize();
+  const ignoreDotThreshold = 0.85;
+
+  for (const b of existingBricks) {
+    if (excludeIds.has(b.id)) continue;
+
+    // Only consider studs that could physically intersect the candidate's body.
+    // Studs aligned with the candidate's up vector are treated as "connectable" and ignored
+    // (we don't model underside cavities, so a true collision check would block normal stacking/SNOT connections).
+    const studs: StudAabb[] = [
+      ...getTopStudAabbsWithDirection(b),
+      ...getSideStudAabbsWithDirection(b),
+    ];
+
+    for (const s of studs) {
+      if (s.direction.dot(up) >= ignoreDotThreshold) continue;
+      if (aabbsOverlap(candidate, s)) return true;
+    }
+  }
+
+  return false;
+};
+
+export const checkCollisionWithSideStuds = (candidate: BrickAabb, existingBricks: PlacedBrick[], excludeIds: Set<string> = new Set()) => {
+  for (const b of existingBricks) {
+    if (excludeIds.has(b.id)) continue;
+    const studs = getSideStudAabbs(b);
+    if (studs.length === 0) continue;
+
+    for (const s of studs) {
+      if (aabbsOverlap(candidate, s)) return true;
+    }
+  }
   return false;
 };
 

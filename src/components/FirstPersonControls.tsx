@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
-import { checkAabbCollision, checkSideStudCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
+import { checkAabbCollision, checkCollisionWithStuds, checkSideStudCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
 import {
   getBrickType,
   getBrickHeight,
@@ -99,7 +99,7 @@ export const FirstPersonControls = () => {
     if (!selection) return false;
 
     // Stud snapping: attach to any stud on the face you're aiming at (supports sideways/downward studs from SNOT).
-    if (raycastHit.hitBrick && !raycastHit.hitGround && selectedBrickType.variant !== 'slope' && selectedBrickType.variant !== 'corner-slope') {
+    if (raycastHit.hitBrick && !raycastHit.hitGround) {
       const hitBrick = raycastHit.hitBrick;
       const stud = findNearestStudConnectorOnFace(hitBrick, raycastHit.position, raycastHit.normal);
 
@@ -134,6 +134,7 @@ export const FirstPersonControls = () => {
           if (!candidateAabb) return false;
           if (candidateAabb.minY < -0.01) return false;
           if (checkAabbCollision(candidateAabb, state.placedBricks)) return false;
+          if (checkCollisionWithStuds(candidateAabb, candidate.orientation, state.placedBricks)) return false;
           if (checkSideStudCollision(candidate, state.placedBricks)) return false;
 
           state.addBrick(candidate);
@@ -230,6 +231,8 @@ export const FirstPersonControls = () => {
       rotation: state.rotation,
     };
 
+    const candidateAabb = getBrickAabb(candidate);
+    if (candidateAabb && checkCollisionWithStuds(candidateAabb, candidate.orientation, state.placedBricks)) return false;
     if (checkSideStudCollision(candidate, state.placedBricks)) return false;
 
     state.addBrick(candidate);
