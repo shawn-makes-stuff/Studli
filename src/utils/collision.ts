@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { PlacedBrick, getBrickType, getBrickHeight, STUD_SPACING } from '../types/brick';
+import { PlacedBrick, getBrickType, getBrickHeight, STUD_HEIGHT, STUD_RADIUS, STUD_SPACING, SIDE_STUD_NEG_X, SIDE_STUD_NEG_Z, SIDE_STUD_POS_X, SIDE_STUD_POS_Z } from '../types/brick';
 import { getBrickFootprint } from './snapToGrid';
 import { boxesOverlap, rangesOverlap } from './math';
 import { getBrickQuaternion } from './brickTransform';
@@ -104,6 +104,80 @@ export const checkAabbCollision = (candidate: BrickAabb, existingBricks: PlacedB
     if (!aabb) continue;
     if (aabbsOverlap(candidate, aabb)) return true;
   }
+  return false;
+};
+
+const getAbsRotation = (q: THREE.Quaternion) => {
+  const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+  const e = m.elements;
+  return {
+    r11: Math.abs(e[0]), r12: Math.abs(e[4]), r13: Math.abs(e[8]),
+    r21: Math.abs(e[1]), r22: Math.abs(e[5]), r23: Math.abs(e[9]),
+    r31: Math.abs(e[2]), r32: Math.abs(e[6]), r33: Math.abs(e[10]),
+  };
+};
+
+const getOrientedBoxAabb = (brick: PlacedBrick, localCenter: THREE.Vector3, halfLocal: THREE.Vector3): BrickAabb | null => {
+  const q = getBrickQuaternion(brick.orientation, brick.rotation);
+  const absR = getAbsRotation(q);
+
+  const worldCenter = localCenter.clone().applyQuaternion(q).add(new THREE.Vector3(brick.position[0], brick.position[1], brick.position[2]));
+
+  const halfWorldX = absR.r11 * halfLocal.x + absR.r12 * halfLocal.y + absR.r13 * halfLocal.z;
+  const halfWorldY = absR.r21 * halfLocal.x + absR.r22 * halfLocal.y + absR.r23 * halfLocal.z;
+  const halfWorldZ = absR.r31 * halfLocal.x + absR.r32 * halfLocal.y + absR.r33 * halfLocal.z;
+
+  return {
+    minX: worldCenter.x - halfWorldX,
+    maxX: worldCenter.x + halfWorldX,
+    minY: worldCenter.y - halfWorldY,
+    maxY: worldCenter.y + halfWorldY,
+    minZ: worldCenter.z - halfWorldZ,
+    maxZ: worldCenter.z + halfWorldZ,
+  };
+};
+
+export const getSideStudAabbs = (brick: PlacedBrick): BrickAabb[] => {
+  const brickType = getBrickType(brick.typeId);
+  if (!brickType) return [];
+
+  const mask = brickType.sideStudMask ?? 0;
+  if (mask === 0) return [];
+
+  const width = brickType.studsX * STUD_SPACING;
+  const depth = brickType.studsZ * STUD_SPACING;
+
+  const halfAlong = STUD_HEIGHT / 2;
+  const halfRad = STUD_RADIUS;
+
+  const studs: Array<{ center: THREE.Vector3; half: THREE.Vector3 }> = [];
+
+  if (mask & SIDE_STUD_POS_X) studs.push({ center: new THREE.Vector3(width / 2 + halfAlong, 0, 0), half: new THREE.Vector3(halfAlong, halfRad, halfRad) });
+  if (mask & SIDE_STUD_NEG_X) studs.push({ center: new THREE.Vector3(-width / 2 - halfAlong, 0, 0), half: new THREE.Vector3(halfAlong, halfRad, halfRad) });
+  if (mask & SIDE_STUD_POS_Z) studs.push({ center: new THREE.Vector3(0, 0, depth / 2 + halfAlong), half: new THREE.Vector3(halfRad, halfRad, halfAlong) });
+  if (mask & SIDE_STUD_NEG_Z) studs.push({ center: new THREE.Vector3(0, 0, -depth / 2 - halfAlong), half: new THREE.Vector3(halfRad, halfRad, halfAlong) });
+
+  const aabbs: BrickAabb[] = [];
+  for (const s of studs) {
+    const aabb = getOrientedBoxAabb(brick, s.center, s.half);
+    if (aabb) aabbs.push(aabb);
+  }
+  return aabbs;
+};
+
+export const checkSideStudCollision = (brick: PlacedBrick, existingBricks: PlacedBrick[], excludeIds: Set<string> = new Set()) => {
+  const studAabbs = getSideStudAabbs(brick);
+  if (studAabbs.length === 0) return false;
+
+  for (const b of existingBricks) {
+    if (excludeIds.has(b.id)) continue;
+    const aabb = getBrickAabb(b);
+    if (!aabb) continue;
+    for (const s of studAabbs) {
+      if (aabbsOverlap(s, aabb)) return true;
+    }
+  }
+
   return false;
 };
 

@@ -12,7 +12,7 @@ import {
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
 import { getLayerPosition, snapToGrid } from '../utils/snapToGrid';
-import { checkAabbCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
+import { checkAabbCollision, checkSideStudCollision, getBrickAabb, getBrickBounds } from '../utils/collision';
 import {
   getCachedBoxGeometry,
   getCachedCornerSlopeGeometry,
@@ -24,6 +24,7 @@ import {
 import { getSelectedConnectionPoint, getBottomConnectionPoints, getTopStudPoints, findNearestLocalPoint } from '../utils/connectionPoints';
 import { rotatePoint } from '../utils/math';
 import { getBrickQuaternion, normalToOrientation } from '../utils/brickTransform';
+import { findNearestStudConnectorOnFace } from '../utils/studConnectors';
 
 export const BrickPreview = () => {
   const raycastHit = useBrickStore((state) => state.raycastHit);
@@ -54,71 +55,52 @@ export const BrickPreview = () => {
 
     const height = getBrickHeight(selectedBrickType.variant);
 
-    // Side-stud snapping (SNOT): allow attaching to side studs on special bricks.
-    if (raycastHit.hitBrick && raycastHit.isTopFace === false && !raycastHit.hitGround) {
+    // Stud snapping: attach to any stud on the face you're aiming at (supports sideways/downward studs from SNOT).
+    if (
+      raycastHit.hitBrick &&
+      !raycastHit.hitGround &&
+      selectedBrickType.variant !== 'slope' &&
+      selectedBrickType.variant !== 'corner-slope'
+    ) {
       const hitBrick = raycastHit.hitBrick;
-      const hitBrickType = getBrickType(hitBrick.typeId);
-      const mask = hitBrickType?.sideStudMask ?? 0;
+      const stud = findNearestStudConnectorOnFace(hitBrick, raycastHit.position, raycastHit.normal);
 
-      const nx = raycastHit.normal[0];
-      const nz = raycastHit.normal[2];
-      const ax = Math.abs(nx);
-      const az = Math.abs(nz);
+      if (stud) {
+        const bottomPoints = getBottomConnectionPoints(selectedBrickType);
+        if (bottomPoints.length > 0) {
+          const idx = ((connectionPointIndex % bottomPoints.length) + bottomPoints.length) % bottomPoints.length;
+          const [selX, selZ] = bottomPoints[idx];
 
-      if (
-        hitBrickType &&
-        mask !== 0 &&
-        (ax > 0.7 || az > 0.7) &&
-        selection.plane === 'bottom' &&
-        selectedBrickType.variant !== 'slope' &&
-        selectedBrickType.variant !== 'corner-slope'
-      ) {
-        // Map the hit normal into the hit brick's local space (Y-rotation only).
-        const [lnx, lnz] = rotatePoint(nx, nz, -hitBrick.rotation);
-        const localFaceBit =
-          Math.abs(lnx) > Math.abs(lnz)
-            ? (lnx > 0 ? SIDE_STUD_POS_X : SIDE_STUD_NEG_X)
-            : (lnz > 0 ? SIDE_STUD_POS_Z : SIDE_STUD_NEG_Z);
-
-        if (mask & localFaceBit) {
-          const hitWidth = hitBrickType.studsX * STUD_SPACING;
-          const hitDepth = hitBrickType.studsZ * STUD_SPACING;
-
-          // Local stud anchor point on the side face (centered for 1x1 SNOT bricks).
-          const localStud = (() => {
-            if (localFaceBit === SIDE_STUD_POS_X) return [hitWidth / 2, 0, 0] as const;
-            if (localFaceBit === SIDE_STUD_NEG_X) return [-hitWidth / 2, 0, 0] as const;
-            if (localFaceBit === SIDE_STUD_POS_Z) return [0, 0, hitDepth / 2] as const;
-            return [0, 0, -hitDepth / 2] as const;
-          })();
-
-          // Rotate to world (Y-rotation only) and offset by brick position.
-          const [rx, rz] = rotatePoint(localStud[0], localStud[2], hitBrick.rotation);
-          const targetPoint: [number, number, number] = [hitBrick.position[0] + rx, hitBrick.position[1], hitBrick.position[2] + rz];
-
-          const orientation = normalToOrientation([nx, raycastHit.normal[1], nz]);
+          const orientation = normalToOrientation(stud.direction);
           const quat = getBrickQuaternion(orientation, rotation);
 
-          const localPoint = new THREE.Vector3(selection.local[0], -height / 2, selection.local[1]);
+          const localPoint = new THREE.Vector3(selX, -height / 2, selZ);
           const worldOffset = localPoint.applyQuaternion(quat);
-          const center: [number, number, number] = [targetPoint[0] - worldOffset.x, targetPoint[1] - worldOffset.y, targetPoint[2] - worldOffset.z];
+          const center: [number, number, number] = [
+            stud.position[0] - worldOffset.x,
+            stud.position[1] - worldOffset.y,
+            stud.position[2] - worldOffset.z,
+          ];
 
-          const candidateAabb = getBrickAabb({
+          const candidate = {
             id: 'preview',
             typeId: selectedBrickType.id,
             position: center,
             color: '',
             rotation,
             orientation,
-          });
-
-          const isValid = candidateAabb ? !checkAabbCollision(candidateAabb, placedBricks) : false;
+          };
+          const candidateAabb = getBrickAabb(candidate);
+          const isValid =
+            Boolean(candidateAabb) &&
+            candidateAabb!.minY >= -0.01 &&
+            !checkAabbCollision(candidateAabb!, placedBricks) &&
+            !checkSideStudCollision(candidate, placedBricks);
 
           return {
             center,
             orientation,
             isValid,
-            mode: 'snot' as const,
           };
         }
       }
@@ -190,10 +172,19 @@ export const BrickPreview = () => {
       preferredBottomY
     );
 
+    const center: [number, number, number] = [snappedX, result.bottomY + height / 2, snappedZ];
+    const candidate = {
+      id: 'preview',
+      typeId: selectedBrickType.id,
+      position: center,
+      color: '',
+      rotation,
+    };
+
     return {
-      center: [snappedX, result.bottomY + height / 2, snappedZ] as [number, number, number],
+      center,
       orientation: 'up' as const,
-      isValid: result.isValid
+      isValid: result.isValid && !checkSideStudCollision(candidate, placedBricks),
     };
   }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height, connectionPointIndex]);
 
