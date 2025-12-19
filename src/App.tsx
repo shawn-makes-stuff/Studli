@@ -5,6 +5,7 @@ import { Crosshair } from './ui/Crosshair';
 import { LandscapeRequiredOverlay } from './ui/LandscapeRequiredOverlay';
 import { VirtualJoystick } from './ui/VirtualJoystick';
 import { VirtualJoystickCamera } from './ui/VirtualJoystickCamera';
+import { VirtualDPad } from './ui/VirtualDPad';
 import { MainMenu } from './ui/MainMenu';
 import { MenuButton } from './ui/MenuButton';
 import { ConnectionPointCycleButton } from './ui/ConnectionPointCycleButton';
@@ -36,6 +37,10 @@ function App() {
   const menuOpen = useBrickStore((state) => state.menuOpen);
   const settings = useBrickStore((state) => state.settings);
   const uiPopoverOpen = useBrickStore((state) => state.uiPopoverOpen);
+  const setVirtualJoystickInput = useBrickStore((state) => state.setVirtualJoystickInput);
+  const setVirtualJoystickCamera = useBrickStore((state) => state.setVirtualJoystickCamera);
+  const setVirtualAscend = useBrickStore((state) => state.setVirtualAscend);
+  const setVirtualDescend = useBrickStore((state) => state.setVirtualDescend);
 
   const isMobile = useMemo(() => detectMobile(), []);
   const isLandscape = viewport.width > viewport.height;
@@ -132,6 +137,15 @@ function App() {
   }, [settings.masterVolume, settings.soundEnabled]);
 
   useEffect(() => {
+    if (!settings.touchControlsEnabled) {
+      setVirtualJoystickInput(null);
+      setVirtualJoystickCamera(null);
+      setVirtualAscend(false);
+      setVirtualDescend(false);
+    }
+  }, [setVirtualAscend, setVirtualDescend, setVirtualJoystickCamera, setVirtualJoystickInput, settings.touchControlsEnabled]);
+
+  useEffect(() => {
     const master = settings.soundEnabled ? settings.masterVolume : 0;
     setMasterOutputGain(master);
 
@@ -166,9 +180,9 @@ function App() {
       )}
 
       {/* Mobile Controls */}
-      {isMobile && !requireLandscape && !menuOpen && (
+      {isMobile && settings.touchControlsEnabled && !requireLandscape && !menuOpen && (
         <>
-          <VirtualJoystick />
+          {settings.movementControlMode === 'dpad' ? <VirtualDPad /> : <VirtualJoystick />}
           <VirtualJoystickCamera />
         </>
       )}

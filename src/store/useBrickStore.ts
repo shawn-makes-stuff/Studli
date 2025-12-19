@@ -13,6 +13,8 @@ type SettingsState = {
   joystickMoveSensitivity: number; // multiplier
   joystickLookSensitivity: number; // multiplier
   quality: 'low' | 'medium' | 'high';
+  touchControlsEnabled: boolean;
+  movementControlMode: 'joystick' | 'dpad';
 };
 
 const SETTINGS_STORAGE_KEY = 'studli_settings_v1';
@@ -43,6 +45,11 @@ const normalizeQuality = (value: unknown): SettingsState['quality'] => {
   return 'medium';
 };
 
+const normalizeMovementControlMode = (value: unknown): SettingsState['movementControlMode'] => {
+  if (value === 'joystick' || value === 'dpad') return value;
+  return 'joystick';
+};
+
 const readSettings = (): SettingsState => {
   if (typeof window === 'undefined') {
     return {
@@ -53,6 +60,8 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
       quality: 'medium',
+      touchControlsEnabled: true,
+      movementControlMode: 'joystick',
     };
   }
 
@@ -67,6 +76,8 @@ const readSettings = (): SettingsState => {
         joystickMoveSensitivity: 1.0,
         joystickLookSensitivity: 1.0,
         quality: 'medium',
+        touchControlsEnabled: true,
+        movementControlMode: 'joystick',
       };
     }
 
@@ -84,6 +95,8 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: clamp(parsed?.joystickMoveSensitivity ?? 1.0, 0.4, 2.0),
       joystickLookSensitivity: clamp(parsed?.joystickLookSensitivity ?? 1.0, 0.4, 2.0),
       quality: normalizeQuality((parsed as Record<string, unknown> | null)?.quality),
+      touchControlsEnabled: Boolean((parsed as Record<string, unknown> | null)?.touchControlsEnabled ?? true),
+      movementControlMode: normalizeMovementControlMode((parsed as Record<string, unknown> | null)?.movementControlMode),
     };
   } catch {
     return {
@@ -94,6 +107,8 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
       quality: 'medium',
+      touchControlsEnabled: true,
+      movementControlMode: 'joystick',
     };
   }
 };
@@ -196,6 +211,8 @@ interface BrickStore {
   setJoystickMoveSensitivity: (sensitivity: number) => void;
   setJoystickLookSensitivity: (sensitivity: number) => void;
   setQuality: (quality: SettingsState['quality']) => void;
+  setTouchControlsEnabled: (enabled: boolean) => void;
+  setMovementControlMode: (mode: SettingsState['movementControlMode']) => void;
   setUiPopoverOpen: (open: boolean) => void;
   setUiPopoverType: (type: BrickStore['uiPopoverType']) => void;
 
@@ -422,6 +439,26 @@ export const useBrickStore = create<BrickStore>((set) => ({
       const settings = {
         ...state.settings,
         quality: normalizeQuality(quality),
+      };
+      writeSettings(settings);
+      return { settings };
+    }),
+
+  setTouchControlsEnabled: (enabled) =>
+    set((state) => {
+      const settings = {
+        ...state.settings,
+        touchControlsEnabled: Boolean(enabled),
+      };
+      writeSettings(settings);
+      return { settings };
+    }),
+
+  setMovementControlMode: (mode) =>
+    set((state) => {
+      const settings = {
+        ...state.settings,
+        movementControlMode: normalizeMovementControlMode(mode),
       };
       writeSettings(settings);
       return { settings };

@@ -81,6 +81,7 @@ export const FirstPersonControls = () => {
   const menuOpen = useBrickStore((state) => state.menuOpen);
   const joystickMoveSensitivity = useBrickStore((state) => state.settings.joystickMoveSensitivity);
   const joystickLookSensitivity = useBrickStore((state) => state.settings.joystickLookSensitivity);
+  const touchControlsEnabled = useBrickStore((state) => state.settings.touchControlsEnabled);
   const isTouchDevice = detectMobile();
 
   const controlsDisabled = uiControlsDisabled || menuOpen;
@@ -811,7 +812,7 @@ export const FirstPersonControls = () => {
 
   // Update loop
   useFrame((_state, delta) => {
-    const allowTouchControls = isTouchDevice && !controlsDisabled;
+    const allowTouchControls = isTouchDevice && touchControlsEnabled && !controlsDisabled;
 
     // Get camera direction
     camera.getWorldDirection(directionRef.current);

@@ -40,6 +40,8 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
   const setJoystickMoveSensitivity = useBrickStore((state) => state.setJoystickMoveSensitivity);
   const setJoystickLookSensitivity = useBrickStore((state) => state.setJoystickLookSensitivity);
   const setQuality = useBrickStore((state) => state.setQuality);
+  const setTouchControlsEnabled = useBrickStore((state) => state.setTouchControlsEnabled);
+  const setMovementControlMode = useBrickStore((state) => state.setMovementControlMode);
 
   const [view, setView] = useState<MenuView>('main');
   const [notice, setNotice] = useState<string | null>(null);
@@ -326,6 +328,62 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
 
                 {isMobile && (
                   <div className="space-y-4 pt-1">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                          <TuneIcon fontSize="small" />
+                          Touch controls
+                        </div>
+                        <button
+                          onClick={() => {
+                            playSfx('click');
+                            setTouchControlsEnabled(!settings.touchControlsEnabled);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                            settings.touchControlsEnabled
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-gray-900 border-gray-700 text-gray-200'
+                          }`}
+                        >
+                          {settings.touchControlsEnabled ? 'On' : 'Off'}
+                        </button>
+                      </div>
+                      <div className="text-[11px] text-gray-400">
+                        Shows on-screen movement/look controls.
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                          <TuneIcon fontSize="small" />
+                          Movement control
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(['joystick', 'dpad'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              onClick={() => {
+                                playSfx('click');
+                                setMovementControlMode(mode);
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                                settings.movementControlMode === mode
+                                  ? 'bg-blue-600 border-blue-500 text-white'
+                                  : 'bg-gray-900 border-gray-700 text-gray-200 hover:bg-gray-800'
+                              }`}
+                              title={mode === 'dpad' ? 'D-pad' : 'Joystick'}
+                            >
+                              {mode === 'dpad' ? 'D-pad' : 'Joystick'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-gray-400">
+                        D-pad can be easier for kids.
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
