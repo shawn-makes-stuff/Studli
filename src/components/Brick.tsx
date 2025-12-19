@@ -32,6 +32,8 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
   const brickType = getBrickType(brick.typeId);
   if (!brickType) return null;
 
+  const deleteHighlightColor = '#b00020';
+
   const detailsGroupRef = useRef<THREE.Group>(null);
   const studsRef = useRef<THREE.InstancedMesh>(null);
   const [posX, posY, posZ] = brick.position;
@@ -158,18 +160,18 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
       {isDeleteSelected && bodyGeometry && (
         <mesh
           geometry={bodyGeometry}
-          scale={[1.01, 1.01, 1.01]}
+          scale={[1.02, 1.02, 1.02]}
           userData={{ ignoreRaycast: true }}
           raycast={() => null}
           renderOrder={20}
         >
           <meshStandardMaterial
-            color="#ff1744"
+            color={deleteHighlightColor}
             transparent
-            opacity={0.22}
+            opacity={0.36}
             depthWrite={false}
-            emissive="#ff1744"
-            emissiveIntensity={0.75}
+            emissive={deleteHighlightColor}
+            emissiveIntensity={1.15}
           />
         </mesh>
       )}
@@ -213,7 +215,11 @@ export const Brick = ({ brick, isDeleteSelected }: BrickProps) => {
               userData={{ isStud: true }}
               raycast={() => null}
             >
-              <meshStandardMaterial color={brick.color} />
+              <meshStandardMaterial
+                color={isDeleteSelected ? deleteHighlightColor : brick.color}
+                emissive={isDeleteSelected ? deleteHighlightColor : '#000000'}
+                emissiveIntensity={isDeleteSelected ? 0.85 : 0}
+              />
             </instancedMesh>
           )}
         </group>

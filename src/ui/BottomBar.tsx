@@ -254,26 +254,6 @@ export const BottomBar = () => {
                   if (document.pointerLockElement) {
                     document.exitPointerLock();
                   }
-                  toggleDeleteMode();
-                }}
-                className={`
-                  w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 transition-all shadow-lg backdrop-blur-sm
-                  ${deleteMode
-                    ? 'border-red-400 bg-red-600/80'
-                    : 'border-gray-600 hover:border-gray-400 bg-gray-800/80'
-                  }
-                  active:scale-95
-                `}
-                title="Delete mode (X)"
-              >
-                <DeleteOutlineIcon className="text-white" />
-              </button>
-              <button
-                onClick={() => {
-                  playSfx('click');
-                  if (document.pointerLockElement) {
-                    document.exitPointerLock();
-                  }
                   rotatePreview();
                 }}
                 className={`
@@ -304,6 +284,27 @@ export const BottomBar = () => {
                 title="Undo (Ctrl+Z)"
               >
                 <UndoIcon className="mx-auto" fontSize="small" />
+              </button>
+
+              <button
+                onClick={() => {
+                  playSfx('click');
+                  if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                  }
+                  toggleDeleteMode();
+                }}
+                className={`
+                  w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 transition-all shadow-lg backdrop-blur-sm
+                  ${deleteMode
+                    ? 'border-red-400 bg-red-600/80'
+                    : 'border-gray-600 hover:border-gray-400 bg-gray-800/80'
+                  }
+                  active:scale-95
+                `}
+                title="Delete mode (X)"
+              >
+                <DeleteOutlineIcon className="text-white" />
               </button>
             </div>
           </div>
