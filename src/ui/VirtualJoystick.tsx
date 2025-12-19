@@ -120,7 +120,7 @@ export const VirtualJoystick = () => {
 
   return (
     <div
-      className={`fixed bottom-20 left-6 z-20 pointer-events-none select-none flex flex-col items-start ${uiControlsDisabled ? 'opacity-40' : ''}`}
+      className={`fixed bottom-20 ui-safe-left z-20 pointer-events-none select-none flex flex-col items-start ${uiControlsDisabled ? 'opacity-40' : ''}`}
     >
       <button
         onPointerDown={handleAscendDown}

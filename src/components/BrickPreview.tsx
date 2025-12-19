@@ -2,12 +2,22 @@ import { useMemo } from 'react';
 import {
   STUD_SPACING,
   STUD_HEIGHT,
+  getBrickType,
   getBrickHeight,
 } from '../types/brick';
 import { useBrickStore } from '../store/useBrickStore';
-import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
+import { getLayerPosition, snapToGrid } from '../utils/snapToGrid';
 import { getBrickBounds } from '../utils/collision';
-import { getCachedSlopeGeometry, getCachedCornerSlopeGeometry, calculateStudPositions, getStudGeometry } from '../utils/geometry';
+import {
+  getCachedBoxGeometry,
+  getCachedCornerSlopeGeometry,
+  getCachedRoundedRectGeometry,
+  getCachedSlopeGeometry,
+  calculateStudPositions,
+  getStudGeometry
+} from '../utils/geometry';
+import { getSelectedConnectionPoint, getBottomConnectionPoints, getTopStudPoints, findNearestLocalPoint } from '../utils/connectionPoints';
+import { rotatePoint } from '../utils/math';
 
 export const BrickPreview = () => {
   const raycastHit = useBrickStore((state) => state.raycastHit);
@@ -17,6 +27,7 @@ export const BrickPreview = () => {
   const rotation = useBrickStore((state) => state.rotation);
   const layerOffset = useBrickStore((state) => state.layerOffset);
   const placedBricks = useBrickStore((state) => state.placedBricks);
+  const connectionPointIndex = useBrickStore((state) => state.connectionPointIndex);
 
   const width = (selectedBrickType?.studsX ?? 1) * STUD_SPACING;
   const depth = (selectedBrickType?.studsZ ?? 1) * STUD_SPACING;
@@ -40,13 +51,45 @@ export const BrickPreview = () => {
       targetZ += raycastHit.normal[2] * offsetDistance;
     }
 
-    const [snappedX, snappedZ] = snapToGrid(
-      targetX,
-      targetZ,
-      selectedBrickType.studsX,
-      selectedBrickType.studsZ,
-      rotation
-    );
+    const selection = getSelectedConnectionPoint(selectedBrickType, connectionPointIndex);
+    if (!selection) return null;
+
+    let targetStudX: number;
+    let targetStudZ: number;
+
+    const isAimingUnderBrick = Boolean(raycastHit.hitBrick) && raycastHit.normal[1] < -0.7;
+    const shouldTargetBrickConnectionGrid = Boolean(raycastHit.hitBrick) && raycastHit.isTopFace !== false;
+
+    if (shouldTargetBrickConnectionGrid && raycastHit.hitBrick) {
+      const hitBrick = raycastHit.hitBrick;
+      const hitBrickType = getBrickType(hitBrick.typeId);
+      const targetPlanePoints = hitBrickType
+        ? (isAimingUnderBrick ? getBottomConnectionPoints(hitBrickType) : getTopStudPoints(hitBrickType))
+        : [];
+
+      if (targetPlanePoints.length > 0) {
+        const dx = targetX - hitBrick.position[0];
+        const dz = targetZ - hitBrick.position[2];
+        const [localX, localZ] = rotatePoint(dx, dz, -hitBrick.rotation);
+        const nearestLocal = findNearestLocalPoint(localX, localZ, targetPlanePoints);
+
+        if (nearestLocal) {
+          const [rx, rz] = rotatePoint(nearestLocal[0], nearestLocal[1], hitBrick.rotation);
+          targetStudX = hitBrick.position[0] + rx;
+          targetStudZ = hitBrick.position[2] + rz;
+        } else {
+          [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+        }
+      } else {
+        [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+      }
+    } else {
+      [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+    }
+
+    const [selOffsetX, selOffsetZ] = rotatePoint(selection.local[0], selection.local[1], rotation);
+    const snappedX = targetStudX - selOffsetX;
+    const snappedZ = targetStudZ - selOffsetZ;
 
     let preferredBottomY: number | undefined;
     if (raycastHit.hitBrick) {
@@ -81,19 +124,15 @@ export const BrickPreview = () => {
       position: [snappedX, result.bottomY, snappedZ] as [number, number, number],
       isValid: result.isValid
     };
-  }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height]);
+  }, [raycastHit, selectedBrickType, rotation, layerOffset, placedBricks, height, connectionPointIndex]);
 
-  // Get cached slope geometry
-  const slopeGeometry = useMemo(() => {
-    if (!isSlope) return null;
-    return getCachedSlopeGeometry(width, height, depth, isInverted);
-  }, [isSlope, width, height, depth, isInverted]);
-
-  // Get cached corner slope geometry
-  const cornerSlopeGeometry = useMemo(() => {
-    if (!isCornerSlope) return null;
-    return getCachedCornerSlopeGeometry(width, height, depth, isInverted);
-  }, [isCornerSlope, width, height, depth, isInverted]);
+  const bodyGeometry = useMemo(() => {
+    if (!selectedBrickType) return null;
+    if (isSlope) return getCachedSlopeGeometry(width, height, depth, isInverted);
+    if (isCornerSlope) return getCachedCornerSlopeGeometry(width, height, depth, isInverted);
+    if (selectedBrickType.isRound) return getCachedRoundedRectGeometry(width, height, depth);
+    return getCachedBoxGeometry(width, height, depth);
+  }, [selectedBrickType, isSlope, isCornerSlope, width, height, depth, isInverted]);
 
   // Get shared stud geometry
   const studGeometry = useMemo(() => getStudGeometry(), []);
@@ -118,41 +157,26 @@ export const BrickPreview = () => {
       userData={{ ignoreRaycast: true }}
     >
       {/* Main brick body */}
-      {isSlope && slopeGeometry ? (
-        <mesh key="preview-slope" geometry={slopeGeometry}>
+      {bodyGeometry && (
+        <mesh key={`preview-${selectedBrickType.id}`} geometry={bodyGeometry} raycast={() => null}>
           <meshStandardMaterial
             color={previewColor}
             transparent
             opacity={opacity}
             depthWrite={false}
-            flatShading
-          />
-        </mesh>
-      ) : isCornerSlope && cornerSlopeGeometry ? (
-        <mesh key="preview-corner-slope" geometry={cornerSlopeGeometry}>
-          <meshStandardMaterial
-            color={previewColor}
-            transparent
-            opacity={opacity}
-            depthWrite={false}
-            flatShading
-          />
-        </mesh>
-      ) : (
-        <mesh key="preview-box">
-          <boxGeometry args={[width, height, depth]} />
-          <meshStandardMaterial
-            color={previewColor}
-            transparent
-            opacity={opacity}
-            depthWrite={false}
+            flatShading={isSlope || isCornerSlope}
           />
         </mesh>
       )}
 
       {/* Studs - using shared geometry */}
       {studPositions.map(([x, z], index) => (
-        <mesh key={index} geometry={studGeometry} position={[x, height / 2 + STUD_HEIGHT / 2, z]}>
+        <mesh
+          key={index}
+          geometry={studGeometry}
+          position={[x, height / 2 + STUD_HEIGHT / 2, z]}
+          raycast={() => null}
+        >
           <meshStandardMaterial
             color={previewColor}
             transparent

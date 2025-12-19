@@ -4,13 +4,17 @@
  */
 
 import * as THREE from 'three';
-import { STUD_SPACING, STUD_RADIUS, STUD_HEIGHT, PLATE_HEIGHT, BrickVariant } from '../types/brick';
+import { STUD_SPACING, STUD_RADIUS, STUD_HEIGHT, PLATE_HEIGHT } from '../types/brick';
+import { calculateStudPositions } from './studPositions';
 
 // Shared cylinder geometry for studs (reused across all bricks)
 let sharedStudGeometry: THREE.CylinderGeometry | null = null;
 
 // Cached box geometries (reused across all regular bricks/plates/tiles)
 const boxGeometryCache = new Map<string, THREE.BoxGeometry>();
+
+// Cached rounded-rect geometries (reused across all round bricks/plates/tiles)
+const roundedRectGeometryCache = new Map<string, THREE.BufferGeometry>();
 
 // Cached edges geometries (for cavity-like edge enhancement)
 const edgesGeometryCache = new Map<string, THREE.EdgesGeometry>();
@@ -30,6 +34,56 @@ export const getCachedBoxGeometry = (width: number, height: number, depth: numbe
   return boxGeometryCache.get(key)!;
 };
 
+const createRoundedRectShape = (width: number, depth: number, radius: number): THREE.Shape => {
+  const w = width;
+  const h = depth;
+  const r = Math.min(radius, w / 2, h / 2);
+  const x = -w / 2;
+  const y = -h / 2;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + w - r, y);
+  shape.quadraticCurveTo(x + w, y, x + w, y + r);
+  shape.lineTo(x + w, y + h - r);
+  shape.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  shape.lineTo(x + r, y + h);
+  shape.quadraticCurveTo(x, y + h, x, y + h - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
+  return shape;
+};
+
+export const getCachedRoundedRectGeometry = (
+  width: number,
+  height: number,
+  depth: number,
+  radius: number = STUD_SPACING / 2,
+  curveSegments: number = 16
+): THREE.BufferGeometry => {
+  const r = Math.min(radius, width / 2, depth / 2);
+  const key = `rounded-rect-${width}-${height}-${depth}-${r}-${curveSegments}`;
+
+  if (!roundedRectGeometryCache.has(key)) {
+    const shape = createRoundedRectShape(width, depth, r);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: height,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments,
+    });
+
+    // ExtrudeGeometry extrudes along +Z; rotate so height is along +Y and center it like BoxGeometry.
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(0, -height / 2, 0);
+    geometry.computeVertexNormals();
+
+    roundedRectGeometryCache.set(key, geometry);
+  }
+
+  return roundedRectGeometryCache.get(key)!;
+};
+
 export const getCachedEdgesGeometry = (
   geometryKey: string,
   sourceGeometry: THREE.BufferGeometry,
@@ -45,74 +99,7 @@ export const getCachedEdgesGeometry = (
 /**
  * Calculate stud positions for any brick type
  */
-export const calculateStudPositions = (
-  studsX: number,
-  studsZ: number,
-  depth: number,
-  variant: BrickVariant,
-  isInverted: boolean = false
-): [number, number][] => {
-  const positions: [number, number][] = [];
-
-  if (variant === 'tile') {
-    // Tiles have no studs
-    return positions;
-  }
-
-  if (variant === 'corner-slope') {
-    if (isInverted) {
-      // Inverted corner slopes have studs across the entire top surface
-      const startX = -(studsX - 1) / 2 * STUD_SPACING;
-      const startZ = -(studsZ - 1) / 2 * STUD_SPACING;
-
-      for (let x = 0; x < studsX; x++) {
-        for (let z = 0; z < studsZ; z++) {
-          positions.push([startX + x * STUD_SPACING, startZ + z * STUD_SPACING]);
-        }
-      }
-    } else {
-      // Regular corner slopes have a single stud at the corner (back-left, which is -X, -Z)
-      const studX = -(studsX - 1) / 2 * STUD_SPACING;
-      const studZ = -(studsZ - 1) / 2 * STUD_SPACING;
-      positions.push([studX, studZ]);
-    }
-    return positions;
-  }
-
-  if (variant === 'slope') {
-    if (isInverted) {
-      // Inverted slopes have studs across the entire top surface
-      const startX = -(studsX - 1) / 2 * STUD_SPACING;
-      const startZ = -(studsZ - 1) / 2 * STUD_SPACING;
-
-      for (let x = 0; x < studsX; x++) {
-        for (let z = 0; z < studsZ; z++) {
-          positions.push([startX + x * STUD_SPACING, startZ + z * STUD_SPACING]);
-        }
-      }
-    } else {
-      // Regular slopes only have studs on the back row
-      const startX = -(studsX - 1) / 2 * STUD_SPACING;
-      const studZ = -depth / 2 + STUD_SPACING / 2;
-
-      for (let x = 0; x < studsX; x++) {
-        positions.push([startX + x * STUD_SPACING, studZ]);
-      }
-    }
-  } else {
-    // Regular bricks and plates have studs across the entire top
-    const startX = -(studsX - 1) / 2 * STUD_SPACING;
-    const startZ = -(studsZ - 1) / 2 * STUD_SPACING;
-
-    for (let x = 0; x < studsX; x++) {
-      for (let z = 0; z < studsZ; z++) {
-        positions.push([startX + x * STUD_SPACING, startZ + z * STUD_SPACING]);
-      }
-    }
-  }
-
-  return positions;
-};
+export { calculateStudPositions };
 
 /**
  * Create slope geometry with proper face winding for correct normals
@@ -374,6 +361,9 @@ export const clearGeometryCache = (): void => {
 
   boxGeometryCache.forEach((geo) => geo.dispose());
   boxGeometryCache.clear();
+
+  roundedRectGeometryCache.forEach((geo) => geo.dispose());
+  roundedRectGeometryCache.clear();
 
   edgesGeometryCache.forEach((geo) => geo.dispose());
   edgesGeometryCache.clear();

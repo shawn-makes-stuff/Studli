@@ -1,16 +1,20 @@
 # Studli Code Map (Build-Only)
 - React 18 + React Three Fiber/Three.js + Zustand + TypeScript + Tailwind (Vite).
-- Current scope: build-only placement workflow (no edit/select/move/paste), brick variants (brick/plate/tile/slope/corner-slope + inverted), snap-to-grid stacking rules, undo/redo, rotate preview, default-color mode, desktop pointer-lock camera, desktop wheel zoom, touch pinch zoom, mobile dual joysticks + ascend/descend buttons, phone portrait landscape lock screen.
+- Current scope: build-only placement workflow (no edit/select/move/paste), brick variants (brick/plate/tile + optional rounded, slope/corner-slope + inverted), snap-to-grid stacking rules, undo/redo, rotate preview, default-color mode, desktop pointer-lock camera, desktop wheel zoom, touch pinch zoom, mobile dual joysticks + ascend/descend buttons, phone portrait landscape lock screen.
 
 # Entry Points
 - `src/main.tsx` mounts `App` with global styles from `src/index.css`.
 - `src/App.tsx` renders the 3D `Scene` plus overlays (`Crosshair`, `BottomBar`). On touch devices, it shows `VirtualJoystick` + `VirtualJoystickCamera`. On very small screens (phones), it blocks portrait orientation with `src/ui/LandscapeRequiredOverlay.tsx`.
-- `src/ui/ControlsHelp.tsx` adds a desktop-only hint when pointer is not locked, plus a top-right help button that opens a controls modal (desktop vs touch content).
+  - It also renders a start/menu overlay (`src/ui/MainMenu.tsx`) and an in-game menu button (`src/ui/MenuButton.tsx`). While the menu is open, build controls and UI overlays are hidden/disabled but the scene is preserved.
+- Help is accessed from the main menu as its own page. (`src/ui/ControlsHelp.tsx` is legacy/unused.)
+- `src/ui/ConnectionPointCycleButton.tsx` is the top-right mobile button to cycle connection points (same behavior as `C` on desktop).
 - `index.html` uses `viewport-fit=cover` so iPhones in landscape use the full width.
 - PWA: `vite.config.ts` uses `vite-plugin-pwa` to generate `manifest.webmanifest` + service worker; icons live in `public/icons/`.
 
 # State (`src/store/useBrickStore.ts`)
 - Core state:
+  - `menuOpen`: whether the main menu overlay is open (starts true).
+  - `hasActiveSession`: true once a session has started (used to gate Continue/Save).
   - `placedBricks`: placed bricks in the scene.
   - `selectedBrickType`: currently selected brick type to place (defaults to `2x2-brick`).
   - `selectedColor`: last chosen explicit color (used when `useDefaultColor === false`).
@@ -20,6 +24,7 @@
   - `recentBricks`: last-used brick types for quick re-selection.
   - `uiControlsDisabled`: when true, touch controls are suppressed because a small-screen UI popout is open (Brick Picker or Color Picker).
   - `raycastHit`: center-screen raycast result (`position`, `normal`, optional `hitBrick`, `hitGround`, `isTopFace`).
+  - `uiPopoverOpen`: true when Brick/Color popouts are open (used to hide menu + anchor buttons).
   - Mobile inputs:
     - `virtualJoystickInput` (move)
     - `virtualJoystickCamera` (look)
@@ -30,23 +35,30 @@
   - Placement: `addBrick` (pushes `past`, clears `future`, resets `layerOffset`).
   - History: `undo`, `redo`.
   - Inputs: `setRaycastHit`, `setVirtualJoystickInput`, `setVirtualJoystickCamera`, `setVirtualAscend`, `setVirtualDescend`.
+  - Menu/session: `openMenu`, `closeMenu`, `startNewGame`.
+  - Settings (persisted via localStorage): `setSoundEnabled`, `setMasterVolume`, `setEffectsVolume`, `setMusicVolume` (music unused for now), `setJoystickMoveSensitivity`, `setJoystickLookSensitivity`.
+  - Mobile snap: use the top-right anchor button to cycle `connectionPointIndex`.
 
 # Scene & Controls
 - `src/components/Scene.tsx`:
   - Sets up `<Canvas>`, lights, and renders `Grid`, placed `Brick`s, `BrickPreview`, and `FirstPersonControls`.
+  - `BrickDetailCulling` distance-culls expensive brick detail meshes (studs + cavity edges) to reduce draw calls on large builds.
   - Keyboard shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Y` redo, `R` rotate preview.
-  - `src/components/FirstPersonControls.tsx`:
+- `src/components/FirstPersonControls.tsx`:
   - Desktop:
     - Movement: WASD + Space/Ctrl; hold Shift for faster movement.
     - Movement is disabled when the pointer is not locked (so WASD doesn't move the camera while interacting with UI).
     - Pointer lock toggle: Esc (press to unlock when locked; press+release to lock when unlocked).
     - Mouse look: updates camera rotation while pointer-locked.
     - Zoom: mouse wheel adjusts camera FOV.
-    - Placement: listens for `mousedown` on the canvas while pointer-locked; uses the center `raycastHit` + `snapToGrid` + `getLayerPosition`, then calls `addBrick` + `addToRecentBricks`.
+    - Connection points: `C` cycles the active connection point (bottom points first, then top studs).
+    - Placement: listens for `mousedown` on the canvas while pointer-locked; finds the focused stud/connector point under the center `raycastHit`, aligns the selected connection point to it, then calls `getLayerPosition` and finally `addBrick` + `addToRecentBricks`.
+    - Plays a placement sound on successful placement via `utils/sfx.playSfx('place')`.
     - While pointer-locked, key defaults are suppressed (`preventDefault`) to reduce browser shortcuts interfering with controls. It also attempts `navigator.keyboard.lock()` (when supported) to capture reserved key combos.
   - Mobile:
     - Movement: `virtualJoystickInput` (left joystick) + `virtualAscend` / `virtualDescend` buttons.
-    - Look: `virtualJoystickCamera` (right joystick), with sensitivity scaled down on very small screens.
+    - Look: `virtualJoystickCamera` (right joystick), with sensitivity scaled down on very small screens and multiplied by `settings.joystickLookSensitivity`.
+    - Move speed is multiplied by `settings.joystickMoveSensitivity`.
     - Placement: short tap on the canvas places the current brick (uses center `raycastHit`; ignores drags/pinch).
     - Zoom: pinch gesture adjusts camera FOV.
   - Collision: prevents camera capsule from entering brick bounds via `utils/collision.getBrickBounds`.
@@ -54,6 +66,7 @@
     - preview meshes (`userData.ignoreRaycast`)
     - stud meshes (`userData.isStud`)
     - helpers/lines
+    - many non-targetable objects set `raycast={() => null}` to skip intersection math
     It also clamps hits that land near a brick’s top edge back inside the brick footprint to reduce jitter.
 
 # Placement, Snapping, Stacking
@@ -67,16 +80,20 @@
 - `src/utils/snapToGrid.ts`:
   - `snapToGrid` handles XZ snapping based on brick footprint + rotation.
   - `getLayerPosition` finds a valid stacking layer based on collisions and connector rules; it also supports a `preferredBottomY` (used to target the intended layer, e.g. aiming at the ground inside gaps under overhangs).
+- `src/utils/connectionPoints.ts`: computes per-brick connection point cycles (bottom connector points + top studs) and nearest-point selection.
+- `src/utils/studPositions.ts`: shared stud layout calculation used for rendering and connection targeting.
 - `src/utils/collision.ts`: AABB helpers and brick bounds (`getBrickBounds`) used by camera collision and placement validation.
 - `src/utils/math.ts`: 90° rotation helpers and overlap utilities.
 
 # Rendering Bricks
 - `src/components/Brick.tsx` renders a placed brick as:
-  - a box, or cached slope/corner-slope geometry from `src/utils/geometry.ts`
+  - a box, rounded-rect (`BrickType.isRound`), or cached slope/corner-slope geometry from `src/utils/geometry.ts`
   - plus a subtle cavity-like edge overlay (dark valleys + bright ridges via `EdgesGeometry` line segments)
-  - plus stud meshes (flagged with `userData.isStud` for raycast filtering)
+  - plus stud geometry rendered via a per-brick `instancedMesh` (so all studs are a single draw call)
+  - cavity edges + studs are treated as "details" and are distance-culled to keep performance steady on large builds
   - and a group-level `userData.placedBrick` for hit attribution.
-- `src/utils/geometry.ts`: shared stud geometry, stud position calculation, and cached slope/corner-slope geometries.
+- `src/utils/geometry.ts`: shared stud geometry, stud position calculation, and cached box/rounded-rect/slope/corner-slope geometries.
+- `src/components/BrickDetailCulling.tsx` + `src/utils/renderCulling.ts`: global registry + timed update loop for distance-culling brick detail groups.
 
 # UI Overlays
 - `src/ui/BottomBar.tsx`:
@@ -85,9 +102,20 @@
   - Exits pointer lock when opening UI elements so clicks work normally.
 - `src/ui/BrickPickerPopout.tsx`:
   - On very small screens, shows bricks as a single horizontally scrollable row to fit in landscape.
+- `src/ui/BrickThumbnail.tsx`:
+  - Uses a prebuilt spritesheet for default-color brick thumbnails when available (`public/brick-thumbs.png` + `public/brick-thumbs.json`).
+  - Falls back to WebGL thumbnail rendering via `src/utils/brickThumbnailRenderer.ts` when the spritesheet is missing or when rendering a non-default color.
+- Spritesheet generation:
+  - `npm run gen:spritesheet` renders and writes the spritesheet files into `public/`.
+  - Generator sources: `scripts/generate-brick-spritesheet.js`, `scripts/spritesheet.html`, `src/tools/spritesheet.ts`.
 - `src/ui/ColorPopout.tsx`:
   - First color option is Default (`*`) which enables default-color mode (uses `selectedBrickType.color`).
   - Custom color uses an in-app picker (hex input + HSL sliders) instead of native `<input type="color">` for better mobile support.
+- `src/utils/sfx.ts`: lightweight WebAudio sound effects (`click`, `place`) used by UI buttons/menus and brick placement.
+  - `setSfxConfig({ enabled, volume })` is applied from settings: `enabled = soundEnabled`, `volume = masterVolume * effectsVolume`.
+- `src/utils/music.ts`: subtle looping chiptune background music (no asset files).
+  - `setMusicConfig({ enabled, volume })` is applied from settings: `enabled = soundEnabled`, `volume = masterVolume * musicVolume`.
+  - `installMusicAutostart()` retries starting after the first user gesture (mobile browser audio rules).
 - `src/ui/Crosshair.tsx`: always-on center reticle.
 - `src/ui/LandscapeRequiredOverlay.tsx`: shown on phones in portrait; blocks play until rotated to landscape.
 - Mobile:

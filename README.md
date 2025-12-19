@@ -80,6 +80,45 @@ The built files will be in the `dist/` directory.
 - **Chrome/Edge (desktop & Android)**: use the browser's Install option (or the install icon in the address bar).
 - **iOS Safari**: Share → Add to Home Screen.
 
+## Native Android App (Capacitor)
+
+This repo also includes a native Android project (no web portal; the app runs fully offline from packaged assets).
+
+### Prerequisites
+
+- Android Studio (includes Android SDK + emulator tooling)
+- Java/JDK (Android Studio usually installs what you need)
+
+### Build + Sync
+
+```bash
+npm run build
+npm run cap:sync:android
+```
+
+### Open in Android Studio
+
+```bash
+npm run cap:open:android
+```
+
+Then build/run from Android Studio (device or emulator).
+
+### App Icon
+
+App icons/splash screens are generated from `brick.png` via `@capacitor/assets`:
+
+```bash
+npm run cap:assets:android
+```
+
+## Brick Thumbnail Spritesheet (Faster UI)
+
+The brick picker can use a prebuilt spritesheet for brick thumbnails to avoid slow on-device WebGL thumbnail generation.
+
+- Generate (writes `public/brick-thumbs.png` + `public/brick-thumbs.json`): `npm run gen:spritesheet`
+- If the spritesheet files are missing, the app automatically falls back to the existing thumbnail renderer.
+
 ## Tech Stack
 
 - **React 18** - UI framework
@@ -90,6 +129,7 @@ The built files will be in the `dist/` directory.
 - **Vite** - Build tool and dev server
 - **Tailwind CSS** - Styling
 - **Material UI Icons** - Action icons
+- **Capacitor** - Native Android app shell
 
 ## Project Structure
 

@@ -13,6 +13,8 @@ DONE
 - Tiny screens: color picker is 2-row horizontal scroll
 - Custom color picker (HSL sliders + hex) instead of native `<input type="color">`
 - PWA support (manifest + service worker + icons)
+- SFX: brick placement + UI/menu clicks
+- Round variants for bricks/plates/tiles
 
 TODO / VERIFY
 - Browser shortcut suppression in build mode: confirm `Ctrl+W` (and other reserved combos) are blocked in target browsers; some browsers may ignore `preventDefault` unless `navigator.keyboard.lock()` is supported/allowed.

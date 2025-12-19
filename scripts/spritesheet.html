@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studli Spritesheet Generator</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #030712; color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      #root { padding: 16px; }
+      button, input { font: inherit; }
+      .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .card { background: rgba(17,24,39,0.7); border: 1px solid rgba(55,65,81,0.8); border-radius: 12px; padding: 12px; }
+      .muted { color: #9ca3af; font-size: 12px; }
+      .ok { color: #34d399; }
+      .err { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="card">
+      <div class="row">
+        <strong>Brick Thumbnail Spritesheet</strong>
+      </div>
+      <div class="muted" style="margin-top: 6px;">
+        This page is used by `npm run gen:spritesheet` to render and export `public/brick-thumbs.png` + `public/brick-thumbs.json`.
+      </div>
+      <div id="app"></div>
+    </div>
+    <script type="module" src="/src/tools/spritesheet.ts"></script>
+  </body>
+</html>
+

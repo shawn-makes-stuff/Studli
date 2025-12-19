@@ -4,6 +4,8 @@ import { BrickThumbnail } from './BrickThumbnail';
 import { SearchIcon, CloseIcon } from './Icons';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import { playSfx } from '../utils/sfx';
+import { loadBrickSpriteSheet } from '../utils/brickSpriteSheet';
 
 interface BrickPickerPopoutProps {
   isOpen: boolean;
@@ -91,12 +93,21 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
       setHasBeenOpened(true);
       setLoadedBricks(new Set());
 
-      // Progressively mark bricks as loaded with a stagger effect
       const brickIds = BRICK_TYPES.map(b => b.id);
-      brickIds.forEach((id, index) => {
-        setTimeout(() => {
-          setLoadedBricks(prev => new Set([...prev, id]));
-        }, index * 15); // 15ms stagger per brick
+
+      // If a spritesheet exists, mark all as loaded immediately (fast thumbnails).
+      loadBrickSpriteSheet().then((sheet) => {
+        if (sheet) {
+          setLoadedBricks(new Set(brickIds));
+          return;
+        }
+
+        // Otherwise, progressively mark bricks as loaded with a stagger effect.
+        brickIds.forEach((id, index) => {
+          setTimeout(() => {
+            setLoadedBricks(prev => new Set([...prev, id]));
+          }, index * 15); // 15ms stagger per brick
+        });
       });
     }
   }, [isOpen, hasBeenOpened]);
@@ -111,6 +122,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
         anchorRef.current &&
         !anchorRef.current.contains(event.target as Node)
       ) {
+        playSfx('click');
         onClose();
       }
     };
@@ -271,6 +283,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   }, [selectedCategory, searchQuery]);
 
   const handleBrickSelect = (brick: BrickType) => {
+    playSfx('click');
     onBrickSelect(brick);
     // Only close if not pinned
     if (!isPinned) {
@@ -282,9 +295,125 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
   const currentSize = isResizing ? liveSizeRef.current : size;
   const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
   const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  const isCoarsePointer = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+  const useWindowLayout = isCoarsePointer;
   const isMobileLayout = viewportWidth < 640 || viewportHeight < 520;
   const isTinyScreen = isMobileLayout && (viewportWidth < 360 || viewportHeight < 420);
   const thumbnailSize = isTinyScreen ? 50 : 60;
+
+  if (useWindowLayout) {
+    if (!isOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] pointer-events-auto bg-gray-950">
+        <div
+          className="absolute inset-0 flex flex-col"
+          style={{
+            paddingTop: 'max(2.5rem, env(safe-area-inset-top))',
+            paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+            paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1rem, env(safe-area-inset-right))',
+          }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+            <div className="text-white font-semibold">Bricks</div>
+            <button
+              onClick={() => {
+                playSfx('click');
+                onClose();
+              }}
+              className="text-gray-300 hover:text-white p-2 -m-2 touch-manipulation"
+              aria-label="Close brick picker"
+              title="Close"
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="px-3 py-2 border-b border-gray-800">
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <SearchIcon />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search bricks..."
+                className="w-full pl-10 pr-3 py-2 bg-gray-900 text-white rounded-lg border border-gray-800 focus:border-blue-500 focus:outline-none text-sm placeholder-gray-500"
+              />
+            </div>
+          </div>
+
+          <div className="px-3 py-2 border-b border-gray-800 overflow-x-auto">
+            <div className="flex gap-2">
+              {(Object.keys(CATEGORIES) as CategoryKey[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    playSfx('click');
+                    setSelectedCategory(key);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition whitespace-nowrap touch-manipulation ${
+                    selectedCategory === key
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-900 border-gray-800 text-gray-200 hover:bg-gray-800'
+                  }`}
+                >
+                  {CATEGORIES[key].title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {filteredBricks.length > 0 ? (
+                filteredBricks.map((brick) => {
+                  const isLoaded = loadedBricks.has(brick.id) || hasBeenOpened;
+                  return (
+                    <button
+                      key={brick.id}
+                      onClick={() => handleBrickSelect(brick)}
+                      className={`
+                        p-2 rounded-lg border-2 transition-all touch-manipulation
+                        ${currentBrick?.id === brick.id
+                          ? 'border-blue-500 bg-blue-600/20'
+                          : 'border-gray-800 hover:border-gray-600 bg-gray-900/60'
+                        }
+                        ${isLoaded ? 'active:scale-95' : ''}
+                      `}
+                      title={brick.name}
+                      disabled={!isLoaded}
+                    >
+                      <div className="aspect-square flex items-center justify-center mb-1 relative">
+                        {!isLoaded && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="relative w-8 h-8">
+                              <div className="absolute inset-0 border-2 border-gray-700 rounded-full"></div>
+                              <div className="absolute inset-0 border-2 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                            </div>
+                          </div>
+                        )}
+                        <div className={isLoaded ? 'opacity-100' : 'opacity-0'}>
+                          <BrickThumbnail brickType={brick} color={brick.color} size={thumbnailSize} />
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-gray-300 text-center truncate">
+                        {isLoaded ? brick.name : <div className="h-3 bg-gray-700 rounded animate-pulse"></div>}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="col-span-full text-center text-gray-500 py-8">No bricks found</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -316,6 +445,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                playSfx('click');
                 setIsPinned(!isPinned);
               }}
               className={`p-1 -m-1 touch-manipulation transition-colors ${isPinned ? 'text-blue-400 hover:text-blue-300' : 'text-gray-400 hover:text-white'}`}
@@ -330,6 +460,7 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                playSfx('click');
                 onClose();
               }}
               className="text-gray-400 hover:text-white p-1 -m-1 touch-manipulation"
@@ -361,7 +492,10 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
         {(Object.keys(CATEGORIES) as CategoryKey[]).map((key) => (
           <button
             key={key}
-            onClick={() => setSelectedCategory(key)}
+            onClick={() => {
+              playSfx('click');
+              setSelectedCategory(key);
+            }}
             className={`
               ${isTinyScreen ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-lg font-medium transition-colors whitespace-nowrap touch-manipulation
               ${selectedCategory === key

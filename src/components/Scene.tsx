@@ -5,6 +5,7 @@ import { BrickPreview } from './BrickPreview';
 import { useBrickStore } from '../store/useBrickStore';
 import { useEffect } from 'react';
 import { FirstPersonControls } from './FirstPersonControls';
+import { BrickDetailCulling } from './BrickDetailCulling';
 
 const BrickLayer = () => {
   const placedBricks = useBrickStore((state) => state.placedBricks);
@@ -22,10 +23,12 @@ export const Scene = () => {
   const rotatePreview = useBrickStore((state) => state.rotatePreview);
   const undo = useBrickStore((state) => state.undo);
   const redo = useBrickStore((state) => state.redo);
+  const menuOpen = useBrickStore((state) => state.menuOpen);
 
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (menuOpen) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -55,7 +58,7 @@ export const Scene = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rotatePreview, undo, redo]);
+  }, [menuOpen, rotatePreview, undo, redo]);
 
   return (
     <Canvas
@@ -82,6 +85,7 @@ export const Scene = () => {
       <BrickLayer />
       <BrickPreview />
 
+      <BrickDetailCulling />
       <FirstPersonControls />
     </Canvas>
   );

@@ -120,7 +120,7 @@ export const VirtualJoystickCamera = () => {
 
   return (
     <div
-      className={`fixed bottom-20 right-6 z-20 pointer-events-none select-none flex flex-col items-end ${uiControlsDisabled ? 'opacity-40' : ''}`}
+      className={`fixed bottom-20 ui-safe-right z-20 pointer-events-none select-none flex flex-col items-end ${uiControlsDisabled ? 'opacity-40' : ''}`}
     >
       <button
         onPointerDown={handleDescendDown}

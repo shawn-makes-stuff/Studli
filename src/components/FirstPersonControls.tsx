@@ -3,10 +3,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
 import { getBrickBounds } from '../utils/collision';
-import type { PlacedBrick } from '../types/brick';
-import { snapToGrid, getLayerPosition } from '../utils/snapToGrid';
-import { getBrickHeight, STUD_SPACING } from '../types/brick';
+import { getBrickType, getBrickHeight, STUD_SPACING, type PlacedBrick } from '../types/brick';
+import { getLayerPosition, snapToGrid } from '../utils/snapToGrid';
 import { v4 as uuidv4 } from 'uuid';
+import { playSfx } from '../utils/sfx';
+import { findNearestLocalPoint, getBottomConnectionPoints, getSelectedConnectionPoint, getTopStudPoints } from '../utils/connectionPoints';
+import { rotatePoint } from '../utils/math';
 
 const MOVEMENT_SPEED = 5;
 const FAST_MOVEMENT_MULTIPLIER = 2;
@@ -68,7 +70,12 @@ export const FirstPersonControls = () => {
   const virtualAscend = useBrickStore((state) => state.virtualAscend);
   const virtualDescend = useBrickStore((state) => state.virtualDescend);
   const uiControlsDisabled = useBrickStore((state) => state.uiControlsDisabled);
+  const menuOpen = useBrickStore((state) => state.menuOpen);
+  const joystickMoveSensitivity = useBrickStore((state) => state.settings.joystickMoveSensitivity);
+  const joystickLookSensitivity = useBrickStore((state) => state.settings.joystickLookSensitivity);
   const isTouchDevice = detectMobile();
+
+  const controlsDisabled = uiControlsDisabled || menuOpen;
 
   const tryPlaceFromRaycast = () => {
     const state = useBrickStore.getState();
@@ -87,13 +94,45 @@ export const FirstPersonControls = () => {
       targetZ += raycastHit.normal[2] * offsetDistance;
     }
 
-    const [snappedX, snappedZ] = snapToGrid(
-      targetX,
-      targetZ,
-      selectedBrickType.studsX,
-      selectedBrickType.studsZ,
-      state.rotation
-    );
+    const selection = getSelectedConnectionPoint(selectedBrickType, state.connectionPointIndex);
+    if (!selection) return false;
+
+    let targetStudX: number;
+    let targetStudZ: number;
+
+    const isAimingUnderBrick = Boolean(raycastHit.hitBrick) && raycastHit.normal[1] < -0.7;
+    const shouldTargetBrickConnectionGrid = Boolean(raycastHit.hitBrick) && raycastHit.isTopFace !== false;
+
+    if (shouldTargetBrickConnectionGrid && raycastHit.hitBrick) {
+      const hitBrick = raycastHit.hitBrick;
+      const hitBrickType = getBrickType(hitBrick.typeId);
+      const targetPlanePoints = hitBrickType
+        ? (isAimingUnderBrick ? getBottomConnectionPoints(hitBrickType) : getTopStudPoints(hitBrickType))
+        : [];
+
+      if (targetPlanePoints.length > 0) {
+        const dx = targetX - hitBrick.position[0];
+        const dz = targetZ - hitBrick.position[2];
+        const [localX, localZ] = rotatePoint(dx, dz, -hitBrick.rotation);
+        const nearestLocal = findNearestLocalPoint(localX, localZ, targetPlanePoints);
+
+        if (nearestLocal) {
+          const [rx, rz] = rotatePoint(nearestLocal[0], nearestLocal[1], hitBrick.rotation);
+          targetStudX = hitBrick.position[0] + rx;
+          targetStudZ = hitBrick.position[2] + rz;
+        } else {
+          [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+        }
+      } else {
+        [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+      }
+    } else {
+      [targetStudX, targetStudZ] = snapToGrid(targetX, targetZ, 1, 1, 0);
+    }
+
+    const [selOffsetX, selOffsetZ] = rotatePoint(selection.local[0], selection.local[1], state.rotation);
+    const snappedX = targetStudX - selOffsetX;
+    const snappedZ = targetStudZ - selOffsetZ;
 
     const height = getBrickHeight(selectedBrickType.variant);
 
@@ -138,6 +177,7 @@ export const FirstPersonControls = () => {
       rotation: state.rotation
     });
 
+    playSfx('place');
     state.addToRecentBricks(selectedBrickType);
     return true;
   };
@@ -153,6 +193,11 @@ export const FirstPersonControls = () => {
       const allowDesktopMovement = isPointerLockedRef.current;
 
       switch (event.code) {
+        case 'KeyC':
+          if (!isTouchDevice && !allowDesktopMovement) return;
+          if (allowDesktopMovement) event.preventDefault();
+          useBrickStore.getState().cycleConnectionPoint();
+          break;
         case 'KeyW':
           if (!isTouchDevice && !allowDesktopMovement) return;
           if (allowDesktopMovement) event.preventDefault();
@@ -291,7 +336,7 @@ export const FirstPersonControls = () => {
     const el = gl.domElement;
 
     const handleTouchStart = (event: TouchEvent) => {
-      if (uiControlsDisabled) return;
+      if (controlsDisabled) return;
       if (event.touches.length !== 1) {
         tapRef.current = null;
         return;
@@ -308,7 +353,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (uiControlsDisabled) return;
+      if (controlsDisabled) return;
       const start = tapRef.current;
       if (!start) return;
       if (event.touches.length !== 1) {
@@ -325,7 +370,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchEndOrCancel = (event: TouchEvent) => {
-      if (uiControlsDisabled) {
+      if (controlsDisabled) {
         tapRef.current = null;
         return;
       }
@@ -361,7 +406,7 @@ export const FirstPersonControls = () => {
       el.removeEventListener('touchend', handleTouchEndOrCancel);
       el.removeEventListener('touchcancel', handleTouchEndOrCancel);
     };
-  }, [gl.domElement, isTouchDevice, uiControlsDisabled]);
+  }, [controlsDisabled, gl.domElement, isTouchDevice]);
 
   // Suppress browser shortcuts/scrolling while in build mode (pointer-locked).
   useEffect(() => {
@@ -415,7 +460,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchStart = (event: TouchEvent) => {
-      if (uiControlsDisabled) return;
+      if (controlsDisabled) return;
       const touches = event.targetTouches;
       if (touches.length < 2) return;
 
@@ -431,7 +476,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (uiControlsDisabled) {
+      if (controlsDisabled) {
         if (event.cancelable) event.preventDefault();
         return;
       }
@@ -459,7 +504,7 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchEndOrCancel = (event: TouchEvent) => {
-      if (uiControlsDisabled) {
+      if (controlsDisabled) {
         pinchRef.current = null;
         return;
       }
@@ -499,7 +544,7 @@ export const FirstPersonControls = () => {
       el.removeEventListener('touchend', handleTouchEndOrCancel);
       el.removeEventListener('touchcancel', handleTouchEndOrCancel);
     };
-  }, [camera, gl.domElement, isTouchDevice, uiControlsDisabled]);
+  }, [camera, controlsDisabled, gl.domElement, isTouchDevice]);
 
   // Pointer lock management (desktop only)
   useEffect(() => {
@@ -521,6 +566,7 @@ export const FirstPersonControls = () => {
         'ShiftRight',
         'ControlLeft',
         'ControlRight',
+        'KeyC',
         'KeyR',
         'KeyZ',
         'KeyY'
@@ -579,6 +625,12 @@ export const FirstPersonControls = () => {
         escapeDownStartedLockedRef.current = false;
         return;
       }
+
+      // Never (re)capture the mouse while a menu/popover is open.
+      // This keeps Esc from stealing focus when you're interacting with UI.
+      const uiState = useBrickStore.getState();
+      const popoverBlocksPointerLock = uiState.uiPopoverOpen && uiState.uiPopoverType !== 'brickPicker';
+      if (uiState.menuOpen || popoverBlocksPointerLock || uiState.uiControlsDisabled) return;
 
       // Some browsers release pointer lock before dispatching Esc; avoid re-locking immediately.
       const now = performance.now();
@@ -668,7 +720,7 @@ export const FirstPersonControls = () => {
 
   // Update loop
   useFrame((_state, delta) => {
-    const allowTouchControls = isTouchDevice && !uiControlsDisabled;
+    const allowTouchControls = isTouchDevice && !controlsDisabled;
 
     // Get camera direction
     camera.getWorldDirection(directionRef.current);
@@ -704,7 +756,10 @@ export const FirstPersonControls = () => {
     forward.y = 0; // Remove vertical component for horizontal movement
     forward.normalize();
 
-    const speed = MOVEMENT_SPEED * (isFastMove ? FAST_MOVEMENT_MULTIPLIER : 1);
+    const speed =
+      MOVEMENT_SPEED *
+      (isFastMove ? FAST_MOVEMENT_MULTIPLIER : 1) *
+      (allowTouchControls ? joystickMoveSensitivity : 1);
     velocityRef.current.set(0, 0, 0);
     velocityRef.current.addScaledVector(right, -inputVector.x * speed); // Negate for correct left/right
     velocityRef.current.addScaledVector(forward, -inputVector.z * speed); // Negate for correct forward/back
@@ -722,7 +777,7 @@ export const FirstPersonControls = () => {
       const baseRotationSpeed = 0.7; // Radians per second at max joystick deflection (large screens)
       const minDim = Math.min(window.innerWidth, window.innerHeight);
       const scale = Math.max(0.45, Math.min(1, minDim / 800));
-      const rotationSpeed = baseRotationSpeed * scale;
+      const rotationSpeed = baseRotationSpeed * scale * joystickLookSensitivity;
       cameraRotationRef.current.y -= virtualJoystickCamera.x * rotationSpeed * delta;
       cameraRotationRef.current.x -= virtualJoystickCamera.y * rotationSpeed * delta;
 

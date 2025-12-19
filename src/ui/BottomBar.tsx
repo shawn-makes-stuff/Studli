@@ -5,6 +5,7 @@ import { ColorPopout } from './ColorPopout';
 import { BrickPickerPopout } from './BrickPickerPopout';
 import RotateRightIcon from '@mui/icons-material/RotateRight';
 import UndoIcon from '@mui/icons-material/Undo';
+import { playSfx } from '../utils/sfx';
 
 export const BottomBar = () => {
   const [showColorPopout, setShowColorPopout] = useState(false);
@@ -41,8 +42,23 @@ export const BottomBar = () => {
   const undo = useBrickStore((state) => state.undo);
   const past = useBrickStore((state) => state.past);
   const setUiControlsDisabled = useBrickStore((state) => state.setUiControlsDisabled);
+  const setUiPopoverOpen = useBrickStore((state) => state.setUiPopoverOpen);
+  const setUiPopoverType = useBrickStore((state) => state.setUiPopoverType);
+
+  const readBrickPickerPinned = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem('brickPickerPopout');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return Boolean(parsed?.isPinned);
+    } catch {
+      return false;
+    }
+  };
 
   const handleBrickPickerClick = () => {
+    playSfx('click');
     // Exit pointer lock when opening UI elements
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -51,13 +67,30 @@ export const BottomBar = () => {
     setShowColorPopout(false);
   };
 
+  const closeColorPopout = () => {
+    setShowColorPopout(false);
+    if (readBrickPickerPinned()) {
+      setShowBrickPicker(true);
+    }
+  };
+
   const handleColorClick = () => {
+    playSfx('click');
     // Exit pointer lock when opening UI elements
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
-    setShowColorPopout(!showColorPopout);
-    setShowBrickPicker(false);
+    const next = !showColorPopout;
+    setShowColorPopout(next);
+    if (next) {
+      if (!readBrickPickerPinned()) {
+        setShowBrickPicker(false);
+      }
+    } else {
+      if (readBrickPickerPinned()) {
+        setShowBrickPicker(true);
+      }
+    }
   };
 
   const handleColorSelect = (color: string) => {
@@ -75,6 +108,7 @@ export const BottomBar = () => {
   };
 
   const handleRecentBrickClick = (brickType: typeof recentBricks[0]) => {
+    playSfx('click');
     setSelectedBrickType(brickType);
   };
 
@@ -88,8 +122,14 @@ export const BottomBar = () => {
 
   useEffect(() => {
     setUiControlsDisabled(isSmallScreen && (showBrickPicker || showColorPopout));
-    return () => setUiControlsDisabled(false);
-  }, [isSmallScreen, setUiControlsDisabled, showBrickPicker, showColorPopout]);
+    setUiPopoverOpen(showBrickPicker || showColorPopout);
+    setUiPopoverType(showBrickPicker ? 'brickPicker' : showColorPopout ? 'colorPicker' : 'none');
+    return () => {
+      setUiControlsDisabled(false);
+      setUiPopoverOpen(false);
+      setUiPopoverType('none');
+    };
+  }, [isSmallScreen, setUiControlsDisabled, setUiPopoverOpen, setUiPopoverType, showBrickPicker, showColorPopout]);
 
   useEffect(() => {
     const update = () => {
@@ -114,7 +154,7 @@ export const BottomBar = () => {
   return (
     <>
       <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
-        <div className={`max-w-full mx-auto px-2 sm:px-4 ${isCompactHeight ? 'py-1' : 'py-2'} sm:py-3`}>
+        <div className={`max-w-full mx-auto px-2 sm:px-4 ui-safe-x ${isCompactHeight ? 'py-1' : 'py-2'} sm:py-3`}>
           <div className={`flex items-center justify-center ${isCompactHeight ? 'gap-1.5' : 'gap-1'} sm:gap-4`}>
           {/* Brick Picker */}
           <div ref={brickPickerButtonRef} className="flex flex-col items-center gap-1 pointer-events-auto relative">
@@ -161,7 +201,7 @@ export const BottomBar = () => {
             </button>
             <ColorPopout
               isOpen={showColorPopout}
-              onClose={() => setShowColorPopout(false)}
+              onClose={closeColorPopout}
               currentColor={effectiveColor}
               isDefault={useDefaultColor}
               onDefaultSelect={handleDefaultColorSelect}
@@ -209,6 +249,7 @@ export const BottomBar = () => {
             <div className="flex gap-1.5 sm:gap-2">
               <button
                 onClick={() => {
+                  playSfx('click');
                   if (document.pointerLockElement) {
                     document.exitPointerLock();
                   }
@@ -225,6 +266,7 @@ export const BottomBar = () => {
 
               <button
                 onClick={() => {
+                  playSfx('click');
                   if (document.pointerLockElement) {
                     document.exitPointerLock();
                   }

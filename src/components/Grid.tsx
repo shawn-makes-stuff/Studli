@@ -69,6 +69,7 @@ export const Grid = () => {
       <gridHelper
         args={[gridSize, gridSize, GRID_COLOR, GRID_COLOR]}
         position={[0, 0.01, 0]}
+        raycast={() => null}
       />
     </group>
   );

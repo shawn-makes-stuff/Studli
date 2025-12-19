@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import TuneIcon from '@mui/icons-material/Tune';
+import { playSfx } from '../utils/sfx';
 
 interface ColorPopoutProps {
   isOpen: boolean;
@@ -45,11 +46,14 @@ export const ColorPopout = ({
   const [customHexInput, setCustomHexInput] = useState(currentColor);
   const [customHsl, setCustomHsl] = useState<{ h: number; s: number; l: number }>({ h: 0, s: 0, l: 0 });
   const [isCustomPickerOpen, setIsCustomPickerOpen] = useState(false);
+  const [isCustomMode, setIsCustomMode] = useState(false);
   const popoutRef = useRef<HTMLDivElement>(null);
 
   const viewportWidth = typeof window === 'undefined' ? 0 : window.visualViewport?.width ?? window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 0 : window.visualViewport?.height ?? window.innerHeight;
   const isTinyScreen = viewportWidth > 0 && (viewportWidth < 360 || viewportHeight < 420);
+  const isCoarsePointer = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+  const isMobileWindow = isCoarsePointer;
 
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -163,6 +167,8 @@ export const ColorPopout = ({
   useEffect(() => {
     if (!isOpen) return;
     setCustomFromHex(currentColor);
+    const matchesPreset = PRESET_COLORS.some((c) => c.value.toLowerCase() === currentColor.toLowerCase());
+    setIsCustomMode(!isDefault && !matchesPreset);
   }, [currentColor, isOpen]);
 
   useEffect(() => {
@@ -172,11 +178,13 @@ export const ColorPopout = ({
   if (!isOpen) return null;
 
   const handlePresetSelect = (color: string) => {
+    playSfx('click');
     onColorSelect(color);
     onClose();
   };
 
   const handleDefaultClick = () => {
+    playSfx('click');
     onDefaultSelect();
     onClose();
   };
@@ -210,6 +218,196 @@ export const ColorPopout = ({
     onColorSelect(normalized);
   };
 
+  if (isMobileWindow) {
+    const isCurrentPreset = !isDefault && PRESET_COLORS.some((c) => c.value.toLowerCase() === currentColor.toLowerCase());
+    const isCustomActive = !isDefault && (!isCurrentPreset || isCustomMode);
+
+    return (
+      <div className="fixed inset-0 z-[60] pointer-events-auto bg-gray-950">
+        <div
+          className="absolute inset-0 flex flex-col"
+          style={{
+            paddingTop: 'max(2.5rem, env(safe-area-inset-top))',
+            paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+            paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1rem, env(safe-area-inset-right))',
+          }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+            <div className="text-white font-semibold">Color</div>
+            <button
+              onClick={() => {
+                playSfx('click');
+                onClose();
+              }}
+              className="text-gray-300 hover:text-white p-2 -m-2 touch-manipulation"
+              aria-label="Close color picker"
+              title="Close"
+            >
+              X
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-3">
+                <div className="text-gray-200 text-sm font-semibold mb-2">Colors</div>
+                <div className="grid grid-cols-6 gap-2">
+                  <button
+                    onClick={handleDefaultClick}
+                    className={`
+                      w-10 h-10 rounded-lg border-2 transition-all active:scale-95 touch-manipulation flex items-center justify-center
+                      ${isDefault
+                        ? 'border-white ring-2 ring-blue-500'
+                        : 'border-gray-700 hover:border-gray-500 bg-gray-800/60'
+                      }
+                    `}
+                    title="Default color"
+                  >
+                    <span className="text-white font-black text-[22px] leading-none drop-shadow-sm translate-y-[1px] select-none">
+                      *
+                    </span>
+                  </button>
+
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => handlePresetSelect(color.value)}
+                      className={`
+                        w-10 h-10 rounded-lg border-2 transition-all active:scale-95 touch-manipulation
+                        ${!isDefault && currentColor.toLowerCase() === color.value.toLowerCase()
+                          ? 'border-white ring-2 ring-blue-500'
+                          : 'border-gray-700 hover:border-gray-500'
+                        }
+                      `}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    />
+                  ))}
+
+                  <button
+                    onClick={() => {
+                      playSfx('click');
+                      setIsCustomMode(true);
+                      onColorSelect(customColor);
+                    }}
+                    className={`
+                      w-10 h-10 rounded-lg border-2 transition-all active:scale-95 touch-manipulation flex items-center justify-center
+                      ${isCustomActive
+                        ? 'border-white ring-2 ring-blue-500 bg-gray-800/60'
+                        : 'border-gray-700 hover:border-gray-500 bg-gray-800/60'
+                      }
+                    `}
+                    title="Custom color"
+                  >
+                    <TuneIcon className="text-gray-200" fontSize="small" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-gray-200 text-sm font-semibold">Options</div>
+                  <div
+                    className="w-9 h-9 rounded-lg border-2 border-gray-700"
+                    style={{ backgroundColor: isDefault ? '#111827' : currentColor }}
+                    title={isDefault ? 'Default' : currentColor}
+                  />
+                </div>
+
+                {isCustomActive ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-lg border-2 border-gray-700 flex-shrink-0"
+                        style={{ backgroundColor: customColor }}
+                      />
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-300 mb-1" htmlFor="customHexMobile">
+                          Hex
+                        </label>
+                        <input
+                          id="customHexMobile"
+                          value={customHexInput}
+                          onChange={(e) => handleCustomHexChange(e.target.value)}
+                          spellCheck={false}
+                          className="w-full px-3 py-2 rounded-md bg-gray-950 border border-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          inputMode="text"
+                          placeholder="#RRGGBB"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-300">Hue</span>
+                        <span className="text-xs text-gray-400">{Math.round(customHsl.h)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        value={customHsl.h}
+                        onChange={(e) => applyCustomHsl({ ...customHsl, h: Number(e.target.value) })}
+                        className="w-full touch-manipulation"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-300">Saturation</span>
+                        <span className="text-xs text-gray-400">{Math.round(customHsl.s)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={customHsl.s}
+                        onChange={(e) => applyCustomHsl({ ...customHsl, s: Number(e.target.value) })}
+                        className="w-full touch-manipulation"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-300">Lightness</span>
+                        <span className="text-xs text-gray-400">{Math.round(customHsl.l)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={customHsl.l}
+                        onChange={(e) => applyCustomHsl({ ...customHsl, l: Number(e.target.value) })}
+                        className="w-full touch-manipulation"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          playSfx('click');
+                          onClose();
+                        }}
+                        className="px-4 py-2 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm border border-gray-700 active:scale-95 transition"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-300">
+                    Pick a color on the left, or choose Custom to fine-tune.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div
@@ -218,7 +416,10 @@ export const ColorPopout = ({
         <button
           className="absolute inset-0 bg-black/50"
           aria-label="Close color picker"
-          onClick={onClose}
+          onClick={() => {
+            playSfx('click');
+            onClose();
+          }}
         />
         <div className="absolute inset-0 flex items-center justify-center p-4">
           <div
@@ -230,7 +431,10 @@ export const ColorPopout = ({
             {isTinyScreen ? (
               <div className="flex justify-end -mt-1 mb-2">
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    playSfx('click');
+                    onClose();
+                  }}
                   className="text-gray-200 hover:text-white p-1 -m-1 touch-manipulation"
                   aria-label="Close color picker"
                   title="Close"
@@ -242,7 +446,10 @@ export const ColorPopout = ({
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-white font-semibold text-sm">Select Color</h3>
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    playSfx('click');
+                    onClose();
+                  }}
                   className="text-gray-400 hover:text-white p-1 -m-1 touch-manipulation"
                   aria-label="Close color picker"
                   title="Close"
@@ -293,7 +500,10 @@ export const ColorPopout = ({
             {/* Custom Color Option */}
             <div className="pt-3 border-t border-gray-700">
               <button
-                onClick={() => setIsCustomPickerOpen(true)}
+                onClick={() => {
+                  playSfx('click');
+                  setIsCustomPickerOpen(true);
+                }}
                 className="w-full p-3 rounded-lg bg-gray-700 hover:bg-gray-600 active:bg-gray-500 transition-colors touch-manipulation flex items-center gap-3"
                 title="Custom color"
               >
@@ -317,14 +527,20 @@ export const ColorPopout = ({
           <button
             className="absolute inset-0 bg-black/60"
             aria-label="Close custom color picker"
-            onClick={() => setIsCustomPickerOpen(false)}
+            onClick={() => {
+              playSfx('click');
+              setIsCustomPickerOpen(false);
+            }}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[92vw] max-w-sm max-h-[85vh] overflow-y-auto rounded-xl bg-gray-900 border border-gray-700 shadow-2xl">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
                 <h2 className="text-white font-semibold">Custom Color</h2>
                 <button
-                  onClick={() => setIsCustomPickerOpen(false)}
+                  onClick={() => {
+                    playSfx('click');
+                    setIsCustomPickerOpen(false);
+                  }}
                   className="text-gray-300 hover:text-white p-1 -m-1"
                   aria-label="Close"
                   title="Close"
@@ -401,7 +617,10 @@ export const ColorPopout = ({
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
-                  onClick={() => setIsCustomPickerOpen(false)}
+                  onClick={() => {
+                    playSfx('click');
+                    setIsCustomPickerOpen(false);
+                  }}
                   className="px-4 py-2 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm border border-gray-700 active:scale-95 transition"
                 >
                   Done

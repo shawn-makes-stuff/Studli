@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import { useBrickStore } from '../store/useBrickStore';
+import { playSfx } from '../utils/sfx';
 
 const DISMISS_KEY = 'desktopControlsHintDismissed';
 
@@ -66,6 +67,7 @@ export const ControlsHelp = ({ isMobile, hidden }: ControlsHelpProps) => {
   }, [hidden, isMobile, isPointerLocked, uiControlsDisabled]);
 
   const dismissHint = () => {
+    playSfx('click');
     setIsHintDismissed(true);
     writeDismissed(true);
   };
@@ -95,8 +97,11 @@ export const ControlsHelp = ({ isMobile, hidden }: ControlsHelpProps) => {
 
       {showHelpButton && (
         <button
-          onClick={() => setIsHelpOpen(true)}
-          className="fixed top-3 right-3 z-50 pointer-events-auto w-10 h-10 rounded-full bg-gray-800 border border-gray-600 text-white shadow-lg hover:bg-gray-700 active:scale-95 transition flex items-center justify-center"
+          onClick={() => {
+            playSfx('click');
+            setIsHelpOpen(true);
+          }}
+          className="fixed ui-safe-top ui-safe-right z-50 pointer-events-auto w-10 h-10 rounded-full bg-gray-800 border border-gray-600 text-white shadow-lg hover:bg-gray-700 active:scale-95 transition flex items-center justify-center"
           aria-label="Help"
           title="Help"
         >
@@ -109,14 +114,20 @@ export const ControlsHelp = ({ isMobile, hidden }: ControlsHelpProps) => {
           <button
             className="absolute inset-0 bg-black/60"
             aria-label="Close help"
-            onClick={() => setIsHelpOpen(false)}
+            onClick={() => {
+              playSfx('click');
+              setIsHelpOpen(false);
+            }}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[92vw] max-w-md max-h-[85vh] overflow-y-auto rounded-xl bg-gray-900 border border-gray-700 shadow-2xl">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
                 <h2 className="text-white font-semibold">Controls</h2>
                 <button
-                  onClick={() => setIsHelpOpen(false)}
+                  onClick={() => {
+                    playSfx('click');
+                    setIsHelpOpen(false);
+                  }}
                   className="text-gray-300 hover:text-white p-1 -m-1"
                   aria-label="Close"
                   title="Close"
@@ -148,6 +159,7 @@ export const ControlsHelp = ({ isMobile, hidden }: ControlsHelpProps) => {
                       <li>Click: place brick</li>
                       <li>Mouse wheel: zoom</li>
                       <li>Shift: move faster</li>
+                      <li>C: cycle connection point</li>
                       <li>R: rotate preview</li>
                       <li>Ctrl/Cmd+Z: undo</li>
                     </ul>
