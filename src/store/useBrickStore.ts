@@ -6,6 +6,7 @@ const DEFAULT_BRICK_TYPE: BrickType =
   BRICK_TYPES.find((b) => b.id === '2x2-brick') ?? BRICK_TYPES[0];
 
 type SettingsState = {
+  deviceClass?: 'desktop' | 'mobile';
   soundEnabled: boolean;
   masterVolume: number; // 0..1
   effectsVolume: number; // 0..1
@@ -15,6 +16,7 @@ type SettingsState = {
   quality: 'low' | 'medium' | 'high';
   touchControlsEnabled: boolean;
   movementControlMode: 'joystick' | 'dpad';
+  touchToPlaceEnabled: boolean;
 };
 
 const SETTINGS_STORAGE_KEY = 'studli_settings_v1';
@@ -50,9 +52,19 @@ const normalizeMovementControlMode = (value: unknown): SettingsState['movementCo
   return 'joystick';
 };
 
+const getDefaultTouchControlsEnabled = () => {
+  if (typeof window === 'undefined') return false;
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isIPad = (navigator.userAgent.includes('Mac') && 'ontouchstart' in window && navigator.maxTouchPoints > 1);
+  return mobileRegex || isIPad;
+};
+
+const getDeviceClass = (): 'desktop' | 'mobile' => (getDefaultTouchControlsEnabled() ? 'mobile' : 'desktop');
+
 const readSettings = (): SettingsState => {
   if (typeof window === 'undefined') {
     return {
+      deviceClass: 'desktop',
       soundEnabled: true,
       masterVolume: 0.95,
       effectsVolume: 0.9,
@@ -60,15 +72,19 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
       quality: 'medium',
-      touchControlsEnabled: true,
+      touchControlsEnabled: false,
       movementControlMode: 'joystick',
+      touchToPlaceEnabled: false,
     };
   }
 
   try {
+    const defaultTouchControlsEnabled = getDefaultTouchControlsEnabled();
+    const currentDeviceClass = getDeviceClass();
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!raw) {
       return {
+        deviceClass: currentDeviceClass,
         soundEnabled: true,
         masterVolume: 0.95,
         effectsVolume: 0.9,
@@ -76,8 +92,9 @@ const readSettings = (): SettingsState => {
         joystickMoveSensitivity: 1.0,
         joystickLookSensitivity: 1.0,
         quality: 'medium',
-        touchControlsEnabled: true,
+        touchControlsEnabled: defaultTouchControlsEnabled,
         movementControlMode: 'joystick',
+        touchToPlaceEnabled: defaultTouchControlsEnabled,
       };
     }
 
@@ -85,9 +102,32 @@ const readSettings = (): SettingsState => {
       // Back-compat with previous settings
       sfxEnabled?: boolean;
       sfxVolume?: number;
+      deviceClass?: 'desktop' | 'mobile';
     } | null;
 
+    const storedDeviceClass: 'desktop' | 'mobile' = parsed?.deviceClass === 'mobile' ? 'mobile' : 'desktop';
+
+    let touchControlsEnabled = Boolean(
+      (parsed as Record<string, unknown> | null)?.touchControlsEnabled ?? defaultTouchControlsEnabled
+    );
+    let movementControlMode = normalizeMovementControlMode(
+      (parsed as Record<string, unknown> | null)?.movementControlMode
+    );
+    let touchToPlaceEnabled = Boolean(
+      (parsed as Record<string, unknown> | null)?.touchToPlaceEnabled ?? defaultTouchControlsEnabled
+    );
+
+    // If settings were last saved on a different device class, apply platform defaults for touch controls.
+    // This prevents desktop-saved preferences from making first-run mobile UX awkward.
+    if (currentDeviceClass !== storedDeviceClass) {
+      const enableTouchDefaults = currentDeviceClass === 'mobile';
+      touchControlsEnabled = enableTouchDefaults;
+      movementControlMode = 'joystick';
+      touchToPlaceEnabled = enableTouchDefaults;
+    }
+
     return {
+      deviceClass: currentDeviceClass,
       soundEnabled: parsed?.soundEnabled ?? parsed?.sfxEnabled ?? true,
       masterVolume: clamp(parsed?.masterVolume ?? 0.95, 0, 1),
       effectsVolume: clamp(parsed?.effectsVolume ?? parsed?.sfxVolume ?? 0.9, 0, 1),
@@ -95,11 +135,13 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: clamp(parsed?.joystickMoveSensitivity ?? 1.0, 0.4, 2.0),
       joystickLookSensitivity: clamp(parsed?.joystickLookSensitivity ?? 1.0, 0.4, 2.0),
       quality: normalizeQuality((parsed as Record<string, unknown> | null)?.quality),
-      touchControlsEnabled: Boolean((parsed as Record<string, unknown> | null)?.touchControlsEnabled ?? true),
-      movementControlMode: normalizeMovementControlMode((parsed as Record<string, unknown> | null)?.movementControlMode),
+      touchControlsEnabled,
+      movementControlMode,
+      touchToPlaceEnabled,
     };
   } catch {
     return {
+      deviceClass: 'desktop',
       soundEnabled: true,
       masterVolume: 0.95,
       effectsVolume: 0.9,
@@ -107,15 +149,16 @@ const readSettings = (): SettingsState => {
       joystickMoveSensitivity: 1.0,
       joystickLookSensitivity: 1.0,
       quality: 'medium',
-      touchControlsEnabled: true,
+      touchControlsEnabled: false,
       movementControlMode: 'joystick',
+      touchToPlaceEnabled: false,
     };
   }
 };
 
 const writeSettings = (settings: SettingsState) => {
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...settings, deviceClass: getDeviceClass() }));
   } catch {
     // ignore
   }
@@ -213,6 +256,7 @@ interface BrickStore {
   setQuality: (quality: SettingsState['quality']) => void;
   setTouchControlsEnabled: (enabled: boolean) => void;
   setMovementControlMode: (mode: SettingsState['movementControlMode']) => void;
+  setTouchToPlaceEnabled: (enabled: boolean) => void;
   setUiPopoverOpen: (open: boolean) => void;
   setUiPopoverType: (type: BrickStore['uiPopoverType']) => void;
 
@@ -459,6 +503,16 @@ export const useBrickStore = create<BrickStore>((set) => ({
       const settings = {
         ...state.settings,
         movementControlMode: normalizeMovementControlMode(mode),
+      };
+      writeSettings(settings);
+      return { settings };
+    }),
+
+  setTouchToPlaceEnabled: (enabled) =>
+    set((state) => {
+      const settings = {
+        ...state.settings,
+        touchToPlaceEnabled: Boolean(enabled),
       };
       writeSettings(settings);
       return { settings };

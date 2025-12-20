@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBrickStore } from '../store/useBrickStore';
@@ -38,10 +38,7 @@ const detectMobile = () => {
   // Check for iPad specifically (newer iPads report as MacIntel)
   const isIPad = (navigator.userAgent.includes('Mac') && 'ontouchstart' in window && navigator.maxTouchPoints > 1);
 
-  // Check for small screens with touch
-  const isSmallTouch = window.innerWidth <= 1024 && 'ontouchstart' in window;
-
-  return mobileRegex || isIPad || isSmallTouch;
+  return mobileRegex || isIPad;
 };
 
 export const FirstPersonControls = () => {
@@ -82,9 +79,241 @@ export const FirstPersonControls = () => {
   const joystickMoveSensitivity = useBrickStore((state) => state.settings.joystickMoveSensitivity);
   const joystickLookSensitivity = useBrickStore((state) => state.settings.joystickLookSensitivity);
   const touchControlsEnabled = useBrickStore((state) => state.settings.touchControlsEnabled);
+  const touchToPlaceEnabled = useBrickStore((state) => state.settings.touchToPlaceEnabled);
   const isTouchDevice = detectMobile();
+  const isTouchCapable = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator.maxTouchPoints ?? 0) > 0);
+  const disablePointerLock = !isTouchDevice && touchControlsEnabled;
 
   const controlsDisabled = uiControlsDisabled || menuOpen;
+  const allowTouchControls = isTouchCapable && touchControlsEnabled && !controlsDisabled;
+  const allowTouchInteractions = isTouchCapable && (isTouchDevice || touchControlsEnabled) && !controlsDisabled;
+
+  const touchPlaceRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const pointerPlaceRef = useRef<{ id: number; x: number; y: number; time: number; moved: boolean } | null>(null);
+
+  const clearMovementState = useCallback(() => {
+    setMoveForward(false);
+    setMoveBackward(false);
+    setMoveLeft(false);
+    setMoveRight(false);
+    setMoveUp(false);
+    setMoveDown(false);
+    setIsFastMove(false);
+    velocityRef.current.set(0, 0, 0);
+  }, []);
+
+  // Touch controls on desktop: disable and exit pointer lock.
+  useEffect(() => {
+    if (!disablePointerLock) return;
+
+    if (document.pointerLockElement === gl.domElement) {
+      document.exitPointerLock();
+    }
+
+    setIsPointerLocked(false);
+    isPointerLockedRef.current = false;
+    clearMovementState();
+  }, [clearMovementState, disablePointerLock, gl.domElement]);
+
+  const setNdcFromClient = (clientX: number, clientY: number) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+    ndcRef.current.set(x, y);
+  };
+
+  // Desktop + touch controls: allow mouse/pen pointer to drive placement without pointer lock.
+  useEffect(() => {
+    if (!disablePointerLock) return;
+    if (controlsDisabled) return;
+
+    const el = gl.domElement;
+
+    const clearPointerPlacementAim = () => {
+      pointerPlaceRef.current = null;
+      ndcRef.current.set(0, 0);
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return;
+      if (event.button !== 0) return;
+      if (!touchControlsEnabled) return;
+
+      pointerPlaceRef.current = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        time: performance.now(),
+        moved: false
+      };
+
+      el.setPointerCapture(event.pointerId);
+
+      if (touchToPlaceEnabled) {
+        setNdcFromClient(event.clientX, event.clientY);
+      }
+
+      event.preventDefault();
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const current = pointerPlaceRef.current;
+      if (!current) return;
+      if (current.id !== event.pointerId) return;
+
+      const dx = event.clientX - current.x;
+      const dy = event.clientY - current.y;
+      if (Math.hypot(dx, dy) > TOUCH_TAP_MAX_DISTANCE) {
+        pointerPlaceRef.current = { ...current, moved: true };
+      }
+
+      if (touchToPlaceEnabled) {
+        setNdcFromClient(event.clientX, event.clientY);
+      }
+
+      event.preventDefault();
+    };
+
+    const handlePointerUpOrCancel = (event: PointerEvent) => {
+      const current = pointerPlaceRef.current;
+      if (!current) return;
+      if (current.id !== event.pointerId) return;
+
+      pointerPlaceRef.current = null;
+
+      if (touchToPlaceEnabled) {
+        setNdcFromClient(event.clientX, event.clientY);
+        updateRaycastHit();
+        tryPlaceFromRaycast();
+        clearPointerPlacementAim();
+        event.preventDefault();
+        return;
+      }
+
+      // Tap-to-place fallback (mouse click) when touch controls are enabled on desktop.
+      const elapsed = performance.now() - current.time;
+      const dx = event.clientX - current.x;
+      const dy = event.clientY - current.y;
+      const dist = Math.hypot(dx, dy);
+      const moved = current.moved || dist > TOUCH_TAP_MAX_DISTANCE;
+      if (!moved && elapsed <= TOUCH_TAP_MAX_TIME) {
+        tryPlaceFromRaycast();
+      }
+
+      clearPointerPlacementAim();
+      event.preventDefault();
+    };
+
+    el.addEventListener('pointerdown', handlePointerDown, { passive: false });
+    el.addEventListener('pointermove', handlePointerMove, { passive: false });
+    el.addEventListener('pointerup', handlePointerUpOrCancel, { passive: false });
+    el.addEventListener('pointercancel', handlePointerUpOrCancel, { passive: false });
+
+    return () => {
+      clearPointerPlacementAim();
+      el.removeEventListener('pointerdown', handlePointerDown);
+      el.removeEventListener('pointermove', handlePointerMove);
+      el.removeEventListener('pointerup', handlePointerUpOrCancel);
+      el.removeEventListener('pointercancel', handlePointerUpOrCancel);
+    };
+  }, [
+    controlsDisabled,
+    disablePointerLock,
+    gl.domElement,
+    touchControlsEnabled,
+    touchToPlaceEnabled
+  ]);
+
+  const updateRaycastHit = () => {
+    const raycaster = raycasterRef.current;
+    raycaster.setFromCamera(ndcRef.current, camera);
+    raycaster.far = RAYCAST_MAX_DISTANCE;
+
+    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    if (intersects.length > 0) {
+      let hit = null;
+      let brickHit = null;
+      let gridHit = null;
+
+      const hasFlagInParents = (obj: THREE.Object3D, flag: string): boolean => {
+        let current: THREE.Object3D | null = obj;
+        while (current) {
+          if ((current.userData as Record<string, unknown> | undefined)?.[flag]) return true;
+          current = current.parent;
+        }
+        return false;
+      };
+
+      const getPlacedBrickFromParents = (obj: THREE.Object3D): PlacedBrick | null => {
+        let current: THREE.Object3D | null = obj;
+        while (current) {
+          const maybe = (current.userData as Record<string, unknown> | undefined)?.placedBrick;
+          if (maybe) return maybe as PlacedBrick;
+          current = current.parent;
+        }
+        return null;
+      };
+
+      const isGridObject = (obj: THREE.Object3D): boolean => {
+        let current: THREE.Object3D | null = obj;
+        while (current) {
+          if (current.name === 'grid') return true;
+          current = current.parent;
+        }
+        return false;
+      };
+
+      for (const intersect of intersects) {
+        if (intersect.object.type === 'LineSegments' || intersect.object.type === 'GridHelper') {
+          continue;
+        }
+
+        if (hasFlagInParents(intersect.object, 'ignoreRaycast')) continue;
+        if ((intersect.object.userData as Record<string, unknown> | undefined)?.isStud) continue;
+
+        if (isGridObject(intersect.object)) {
+          if (!gridHit) gridHit = intersect;
+        } else if (intersect.object.type === 'Mesh') {
+          if (!brickHit) brickHit = intersect;
+        }
+
+        if (brickHit && gridHit) break;
+      }
+
+      hit = brickHit || gridHit;
+
+      if (hit) {
+        const normal = hit.face?.normal ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+        normal.transformDirection(hit.object.matrixWorld);
+
+        const isGroundHit = hit === gridHit;
+        const hitBrick = isGroundHit ? null : getPlacedBrickFromParents(hit.object);
+        const hitBounds = hitBrick ? getBrickBounds(hitBrick) : null;
+        const isNearBrickTop = Boolean(hitBounds) && Math.abs(hit.point.y - hitBounds!.topY) < 0.15;
+        const isTopFace = Math.abs(normal.y) > 0.7 || isNearBrickTop;
+
+        let hitX = hit.point.x;
+        let hitZ = hit.point.z;
+        if (isNearBrickTop && hitBounds) {
+          const epsilon = 0.001;
+          hitX = Math.min(Math.max(hitX, hitBounds.footprint.minX + epsilon), hitBounds.footprint.maxX - epsilon);
+          hitZ = Math.min(Math.max(hitZ, hitBounds.footprint.minZ + epsilon), hitBounds.footprint.maxZ - epsilon);
+        }
+
+        setRaycastHit({
+          position: [hitX, hit.point.y, hitZ],
+          normal: [normal.x, normal.y, normal.z],
+          hitBrick: hitBrick ?? undefined,
+          hitGround: isGroundHit,
+          isTopFace: isTopFace
+        });
+        return;
+      }
+    }
+
+    setRaycastHit(null);
+  };
 
   const tryPlaceFromRaycast = () => {
     const state = useBrickStore.getState();
@@ -421,20 +650,65 @@ export const FirstPersonControls = () => {
     };
   }, [gl.domElement, isTouchDevice]);
 
-  // Tap to place (touch devices)
+  // Touch interactions (touch-capable devices): tap-to-place, touch-to-place, pinch zoom.
   useEffect(() => {
-    if (!isTouchDevice) return;
+    if (!isTouchCapable) return;
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
 
     const el = gl.domElement;
 
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+    const getDistance = (a: Touch, b: Touch) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+    const getTouchesById = (touches: TouchList, idA: number, idB: number): { a: Touch; b: Touch } | null => {
+      let a: Touch | null = null;
+      let b: Touch | null = null;
+      for (const touch of Array.from(touches)) {
+        if (touch.identifier === idA) a = touch;
+        else if (touch.identifier === idB) b = touch;
+      }
+      return a && b ? { a, b } : null;
+    };
+
+    const clearTouchPlacementAim = () => {
+      touchPlaceRef.current = null;
+      ndcRef.current.set(0, 0);
+    };
+
+    const beginPinch = (t0: Touch, t1: Touch) => {
+      tapRef.current = null;
+      clearTouchPlacementAim();
+      pinchRef.current = {
+        isActive: true,
+        initialDistance: getDistance(t0, t1),
+        initialFov: camera.fov,
+        idA: t0.identifier,
+        idB: t1.identifier
+      };
+    };
+
     const handleTouchStart = (event: TouchEvent) => {
-      if (controlsDisabled) return;
-      if (event.touches.length !== 1) {
-        tapRef.current = null;
+      if (!allowTouchInteractions) return;
+
+      if (event.touches.length >= 2) {
+        beginPinch(event.touches[0], event.touches[1]);
         return;
       }
 
+      if (event.touches.length !== 1) return;
+
       const touch = event.touches[0];
+
+      if (touchControlsEnabled && touchToPlaceEnabled) {
+        tapRef.current = null;
+        pinchRef.current = null;
+        touchPlaceRef.current = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+        setNdcFromClient(touch.clientX, touch.clientY);
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+
       tapRef.current = {
         x: touch.clientX,
         y: touch.clientY,
@@ -445,7 +719,56 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (controlsDisabled) return;
+      if (!allowTouchInteractions) {
+        if (event.cancelable) event.preventDefault();
+        tapRef.current = null;
+        pinchRef.current = null;
+        clearTouchPlacementAim();
+        return;
+      }
+
+      if (event.touches.length >= 2) {
+        if (!pinchRef.current?.isActive) {
+          beginPinch(event.touches[0], event.touches[1]);
+        }
+      }
+
+      const pinch = pinchRef.current;
+      if (pinch?.isActive) {
+        const touches = event.targetTouches;
+        const pair = getTouchesById(touches, pinch.idA, pinch.idB);
+        if (!pair) {
+          pinchRef.current = null;
+          return;
+        }
+
+        const distance = getDistance(pair.a, pair.b);
+        const delta = distance - pinch.initialDistance;
+        const nextFov = clamp(pinch.initialFov - delta * PINCH_ZOOM_SENSITIVITY, MIN_FOV, MAX_FOV);
+        if (nextFov !== camera.fov) {
+          camera.fov = nextFov;
+          camera.updateProjectionMatrix();
+        }
+
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+
+      const touchPlace = touchPlaceRef.current;
+      if (touchPlace) {
+        if (event.touches.length !== 1) {
+          clearTouchPlacementAim();
+          return;
+        }
+
+        const touch = Array.from(event.touches).find((t) => t.identifier === touchPlace.id);
+        if (!touch) return;
+
+        setNdcFromClient(touch.clientX, touch.clientY);
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+
       const start = tapRef.current;
       if (!start) return;
       if (event.touches.length !== 1) {
@@ -462,10 +785,47 @@ export const FirstPersonControls = () => {
     };
 
     const handleTouchEndOrCancel = (event: TouchEvent) => {
-      if (controlsDisabled) {
+      if (!allowTouchInteractions) {
         tapRef.current = null;
+        pinchRef.current = null;
+        clearTouchPlacementAim();
         return;
       }
+
+      const pinch = pinchRef.current;
+      if (pinch?.isActive) {
+        const touches = event.targetTouches;
+        if (touches.length < 2) {
+          pinchRef.current = null;
+        } else {
+          const t0 = touches[0];
+          const t1 = touches[1];
+          pinchRef.current = {
+            isActive: true,
+            initialDistance: getDistance(t0, t1),
+            initialFov: camera.fov,
+            idA: t0.identifier,
+            idB: t1.identifier
+          };
+        }
+      }
+
+      const touchPlace = touchPlaceRef.current;
+      if (touchPlace) {
+        const touch = Array.from(event.changedTouches).find((t) => t.identifier === touchPlace.id);
+        if (!touch) return;
+
+        // Don't place if this interaction turned into a pinch.
+        if (!pinchRef.current?.isActive) {
+          setNdcFromClient(touch.clientX, touch.clientY);
+          updateRaycastHit();
+          tryPlaceFromRaycast();
+        }
+
+        clearTouchPlacementAim();
+        return;
+      }
+
       const start = tapRef.current;
       if (!start) return;
 
@@ -474,7 +834,7 @@ export const FirstPersonControls = () => {
 
       tapRef.current = null;
 
-      // Ignore taps that were part of a pinch gesture
+      // Ignore taps that were part of a pinch gesture.
       if (pinchRef.current?.isActive) return;
 
       const elapsed = performance.now() - start.time;
@@ -487,18 +847,32 @@ export const FirstPersonControls = () => {
       tryPlaceFromRaycast();
     };
 
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
-    el.addEventListener('touchmove', handleTouchMove, { passive: true });
-    el.addEventListener('touchend', handleTouchEndOrCancel, { passive: true });
-    el.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: true });
+    const previousTouchAction = el.style.touchAction;
+    el.style.touchAction = 'none';
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEndOrCancel, { passive: false });
+    el.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: false });
 
     return () => {
+      tapRef.current = null;
+      pinchRef.current = null;
+      clearTouchPlacementAim();
+      el.style.touchAction = previousTouchAction;
       el.removeEventListener('touchstart', handleTouchStart);
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEndOrCancel);
       el.removeEventListener('touchcancel', handleTouchEndOrCancel);
     };
-  }, [controlsDisabled, gl.domElement, isTouchDevice]);
+  }, [
+    allowTouchInteractions,
+    camera,
+    gl.domElement,
+    isTouchCapable,
+    touchControlsEnabled,
+    touchToPlaceEnabled
+  ]);
 
   // Suppress browser shortcuts/scrolling while in build mode (pointer-locked).
   useEffect(() => {
@@ -532,115 +906,9 @@ export const FirstPersonControls = () => {
     };
   }, [gl.domElement, isTouchDevice]);
 
-  // Pinch zoom (touch devices)
-  useEffect(() => {
-    if (!isTouchDevice) return;
-    if (!(camera instanceof THREE.PerspectiveCamera)) return;
-
-    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-
-    const getDistance = (a: Touch, b: Touch) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-
-    const getTouchesById = (touches: TouchList, idA: number, idB: number): { a: Touch; b: Touch } | null => {
-      let a: Touch | null = null;
-      let b: Touch | null = null;
-      for (const touch of Array.from(touches)) {
-        if (touch.identifier === idA) a = touch;
-        else if (touch.identifier === idB) b = touch;
-      }
-      return a && b ? { a, b } : null;
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      if (controlsDisabled) return;
-      const touches = event.targetTouches;
-      if (touches.length < 2) return;
-
-      const t0 = touches[0];
-      const t1 = touches[1];
-      pinchRef.current = {
-        isActive: true,
-        initialDistance: getDistance(t0, t1),
-        initialFov: camera.fov,
-        idA: t0.identifier,
-        idB: t1.identifier
-      };
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (controlsDisabled) {
-        if (event.cancelable) event.preventDefault();
-        return;
-      }
-      const pinch = pinchRef.current;
-      if (!pinch?.isActive) return;
-
-      const touches = event.targetTouches;
-      const pair = getTouchesById(touches, pinch.idA, pinch.idB);
-      if (!pair) {
-        pinchRef.current = null;
-        return;
-      }
-
-      const distance = getDistance(pair.a, pair.b);
-      const delta = distance - pinch.initialDistance;
-
-      // Spread fingers (delta > 0) => zoom in (smaller FOV).
-      const nextFov = clamp(pinch.initialFov - delta * PINCH_ZOOM_SENSITIVITY, MIN_FOV, MAX_FOV);
-      if (nextFov !== camera.fov) {
-        camera.fov = nextFov;
-        camera.updateProjectionMatrix();
-      }
-
-      event.preventDefault();
-    };
-
-    const handleTouchEndOrCancel = (event: TouchEvent) => {
-      if (controlsDisabled) {
-        pinchRef.current = null;
-        return;
-      }
-      const pinch = pinchRef.current;
-      if (!pinch?.isActive) return;
-
-      const touches = event.targetTouches;
-      if (touches.length < 2) {
-        pinchRef.current = null;
-      } else {
-        // If more than one touch remains on the canvas, restart pinch with the first two.
-        const t0 = touches[0];
-        const t1 = touches[1];
-        pinchRef.current = {
-          isActive: true,
-          initialDistance: getDistance(t0, t1),
-          initialFov: camera.fov,
-          idA: t0.identifier,
-          idB: t1.identifier
-        };
-      }
-    };
-
-    const el = gl.domElement;
-    const previousTouchAction = el.style.touchAction;
-    el.style.touchAction = 'none';
-
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
-    el.addEventListener('touchmove', handleTouchMove, { passive: false });
-    el.addEventListener('touchend', handleTouchEndOrCancel, { passive: true });
-    el.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: true });
-
-    return () => {
-      el.style.touchAction = previousTouchAction;
-      el.removeEventListener('touchstart', handleTouchStart);
-      el.removeEventListener('touchmove', handleTouchMove);
-      el.removeEventListener('touchend', handleTouchEndOrCancel);
-      el.removeEventListener('touchcancel', handleTouchEndOrCancel);
-    };
-  }, [camera, controlsDisabled, gl.domElement, isTouchDevice]);
-
   // Pointer lock management (desktop only)
   useEffect(() => {
-    if (isTouchDevice) return;
+    if (isTouchDevice || disablePointerLock) return;
 
     const keyboard = (navigator as unknown as {
       keyboard?: { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
@@ -685,14 +953,7 @@ export const FirstPersonControls = () => {
       } else {
         tryUnlockKeyboard();
         lastPointerLockExitAtRef.current = performance.now();
-        setMoveForward(false);
-        setMoveBackward(false);
-        setMoveLeft(false);
-        setMoveRight(false);
-        setMoveUp(false);
-        setMoveDown(false);
-        setIsFastMove(false);
-        velocityRef.current.set(0, 0, 0);
+        clearMovementState();
       }
     };
 
@@ -761,7 +1022,7 @@ export const FirstPersonControls = () => {
       document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [isTouchDevice, gl, camera, isPointerLocked]);
+  }, [isTouchDevice, disablePointerLock, gl, camera, isPointerLocked, clearMovementState]);
 
   // Camera rotation state for mobile joystick
   const cameraRotationRef = useRef({ x: 0, y: 0 });
@@ -812,8 +1073,6 @@ export const FirstPersonControls = () => {
 
   // Update loop
   useFrame((_state, delta) => {
-    const allowTouchControls = isTouchDevice && touchControlsEnabled && !controlsDisabled;
-
     // Get camera direction
     camera.getWorldDirection(directionRef.current);
     const right = new THREE.Vector3();
@@ -822,20 +1081,18 @@ export const FirstPersonControls = () => {
     // Calculate velocity from input
     const inputVector = new THREE.Vector3();
 
-    // Desktop: Use keyboard state
-    if (!isTouchDevice) {
-      if (isPointerLockedRef.current) {
-        if (moveForward) inputVector.z -= 1;
-        if (moveBackward) inputVector.z += 1;
-        if (moveLeft) inputVector.x -= 1;
-        if (moveRight) inputVector.x += 1;
-      }
-    } else {
-      // Mobile: Use virtual joystick
-      if (allowTouchControls && virtualJoystickInput) {
-        inputVector.x = virtualJoystickInput.x;
-        inputVector.z = virtualJoystickInput.y;
-      }
+    // Keyboard movement while pointer-locked (desktop).
+    if (isPointerLockedRef.current) {
+      if (moveForward) inputVector.z -= 1;
+      if (moveBackward) inputVector.z += 1;
+      if (moveLeft) inputVector.x -= 1;
+      if (moveRight) inputVector.x += 1;
+    }
+
+    // Virtual movement (touch controls, including desktop touchscreens).
+    if (allowTouchControls && virtualJoystickInput) {
+      inputVector.x += virtualJoystickInput.x;
+      inputVector.z += virtualJoystickInput.y;
     }
 
     // Normalize diagonal movement
@@ -857,10 +1114,10 @@ export const FirstPersonControls = () => {
     velocityRef.current.addScaledVector(forward, -inputVector.z * speed); // Negate for correct forward/back
 
     // Add vertical movement
-    if ((allowTouchControls && virtualAscend) || (!isTouchDevice && isPointerLockedRef.current && moveUp)) {
+    if ((allowTouchControls && virtualAscend) || (isPointerLockedRef.current && moveUp)) {
       velocityRef.current.y += speed;
     }
-    if ((allowTouchControls && virtualDescend) || (!isTouchDevice && isPointerLockedRef.current && moveDown)) {
+    if ((allowTouchControls && virtualDescend) || (isPointerLockedRef.current && moveDown)) {
       velocityRef.current.y -= speed;
     }
 
@@ -905,105 +1162,7 @@ export const FirstPersonControls = () => {
       }
     }
 
-    // Perform raycasting from camera center
-    const raycaster = raycasterRef.current;
-    raycaster.setFromCamera(ndcRef.current, camera);
-    raycaster.far = RAYCAST_MAX_DISTANCE;
-
-    const intersects = raycaster.intersectObjects(scene.children, true);
-
-    if (intersects.length > 0) {
-      // Find the first valid hit, prioritizing bricks over grid
-      let hit = null;
-      let brickHit = null;
-      let gridHit = null;
-
-      const hasFlagInParents = (obj: THREE.Object3D, flag: string): boolean => {
-        let current: THREE.Object3D | null = obj;
-        while (current) {
-          if ((current.userData as Record<string, unknown> | undefined)?.[flag]) return true;
-          current = current.parent;
-        }
-        return false;
-      };
-
-      const getPlacedBrickFromParents = (obj: THREE.Object3D): PlacedBrick | null => {
-        let current: THREE.Object3D | null = obj;
-        while (current) {
-          const maybe = (current.userData as Record<string, unknown> | undefined)?.placedBrick;
-          if (maybe) return maybe as PlacedBrick;
-          current = current.parent;
-        }
-        return null;
-      };
-
-      const isGridObject = (obj: THREE.Object3D): boolean => {
-        let current: THREE.Object3D | null = obj;
-        while (current) {
-          if (current.name === 'grid') return true;
-          current = current.parent;
-        }
-        return false;
-      };
-
-      for (const intersect of intersects) {
-        // Skip helpers, edges, and other non-placeable objects
-        if (intersect.object.type === 'LineSegments' || intersect.object.type === 'GridHelper') {
-          continue;
-        }
-
-        // Skip preview/ghost meshes and stud cylinders so the raycast targets real brick bodies/grid.
-        if (hasFlagInParents(intersect.object, 'ignoreRaycast')) continue;
-        if ((intersect.object.userData as Record<string, unknown> | undefined)?.isStud) continue;
-
-        // Categorize hits
-        if (isGridObject(intersect.object)) {
-          if (!gridHit) gridHit = intersect;
-        } else if (intersect.object.type === 'Mesh') {
-          if (!brickHit) brickHit = intersect;
-        }
-
-        // Stop after finding both types
-        if (brickHit && gridHit) break;
-      }
-
-      // Prioritize brick hits, but use grid if no brick found
-      hit = brickHit || gridHit;
-
-      if (hit) {
-        // Get the normal and determine if we hit a brick or the ground
-        const normal = hit.face?.normal ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
-        normal.transformDirection(hit.object.matrixWorld);
-
-        const isGroundHit = hit === gridHit;
-        const hitBrick = isGroundHit ? null : getPlacedBrickFromParents(hit.object);
-        const hitBounds = hitBrick ? getBrickBounds(hitBrick) : null;
-        const isNearBrickTop = Boolean(hitBounds) && Math.abs(hit.point.y - hitBounds!.topY) < 0.15;
-        const isTopFace = Math.abs(normal.y) > 0.7 || isNearBrickTop;
-
-        let hitX = hit.point.x;
-        let hitZ = hit.point.z;
-        if (isNearBrickTop && hitBounds) {
-          // If we clipped a side face near the top edge, clamp inside the brick footprint
-          // so small aim jitter doesn't flip placement to the adjacent cell.
-          const epsilon = 0.001;
-          hitX = Math.min(Math.max(hitX, hitBounds.footprint.minX + epsilon), hitBounds.footprint.maxX - epsilon);
-          hitZ = Math.min(Math.max(hitZ, hitBounds.footprint.minZ + epsilon), hitBounds.footprint.maxZ - epsilon);
-        }
-
-        setRaycastHit({
-          position: [hitX, hit.point.y, hitZ],
-          normal: [normal.x, normal.y, normal.z],
-          hitBrick: hitBrick ?? undefined,
-          hitGround: isGroundHit,
-          isTopFace: isTopFace
-        });
-      } else {
-        setRaycastHit(null);
-      }
-    } else {
-      setRaycastHit(null);
-    }
+    updateRaycastHit();
   });
 
   return null;

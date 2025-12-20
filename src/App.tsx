@@ -19,8 +19,7 @@ import { resumeExistingAudioContext, setMasterOutputGain, suspendExistingAudioCo
 const detectMobile = () => {
   const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isIPad = (navigator.userAgent.includes('Mac') && 'ontouchstart' in window && navigator.maxTouchPoints > 1);
-  const isSmallTouch = window.innerWidth <= 1024 && 'ontouchstart' in window;
-  return mobileRegex || isIPad || isSmallTouch;
+  return mobileRegex || isIPad;
 };
 
 const getViewport = () => {
@@ -43,6 +42,10 @@ function App() {
   const setVirtualDescend = useBrickStore((state) => state.setVirtualDescend);
 
   const isMobile = useMemo(() => detectMobile(), []);
+  const isTouchCapable = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints ?? 0) > 0;
+  }, []);
   const isLandscape = viewport.width > viewport.height;
   const requireLandscape = isMobile && !isLandscape;
 
@@ -173,14 +176,14 @@ function App() {
       {/* UI Overlays */}
       {!menuOpen && <Crosshair />}
       {!requireLandscape && !menuOpen && <BottomBar />}
-      {!isMobile && !requireLandscape && !menuOpen && !uiPopoverOpen && <DesktopControlsHint />}
+      {!isMobile && !requireLandscape && !menuOpen && !uiPopoverOpen && !settings.touchControlsEnabled && <DesktopControlsHint />}
       {!requireLandscape && !menuOpen && !uiPopoverOpen && <MenuButton />}
       {!requireLandscape && !menuOpen && !uiPopoverOpen && (
         <ConnectionPointCycleButton hideWhenPointerLocked={!isMobile} />
       )}
 
       {/* Mobile Controls */}
-      {isMobile && settings.touchControlsEnabled && !requireLandscape && !menuOpen && (
+      {isTouchCapable && settings.touchControlsEnabled && !requireLandscape && !menuOpen && (
         <>
           {settings.movementControlMode === 'dpad' ? <VirtualDPad /> : <VirtualJoystick />}
           <VirtualJoystickCamera />

@@ -20,7 +20,7 @@ export const VirtualJoystick = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [layout, setLayout] = useState(getJoystickLayout);
-  const touchIdRef = useRef<number | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
   const baseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,94 +40,81 @@ export const VirtualJoystick = () => {
 
   useEffect(() => {
     if (uiControlsDisabled) {
-      touchIdRef.current = null;
+      activePointerIdRef.current = null;
       setIsDragging(false);
       setPosition({ x: 0, y: 0 });
       setVirtualJoystickInput(null);
       setVirtualAscend(false);
-      return;
+    }
+  }, [layout.joystickSize, layout.knobSize, setVirtualAscend, setVirtualJoystickInput, uiControlsDisabled]);
+
+  const MAX_DISTANCE = (layout.joystickSize - layout.knobSize) / 2;
+
+  const updatePosition = (clientX: number, clientY: number) => {
+    if (!baseRef.current) return;
+
+    const rect = baseRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    let dx = clientX - centerX;
+    let dy = clientY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > MAX_DISTANCE) {
+      const angle = Math.atan2(dy, dx);
+      dx = Math.cos(angle) * MAX_DISTANCE;
+      dy = Math.sin(angle) * MAX_DISTANCE;
     }
 
-    const MAX_DISTANCE = (layout.joystickSize - layout.knobSize) / 2;
+    setPosition({ x: dx, y: dy });
 
-    const handleTouchStart = (e: TouchEvent) => {
-      if (touchIdRef.current !== null) return;
-      if (!baseRef.current) return;
-      const rect = baseRef.current.getBoundingClientRect();
+    const normalizedX = dx / MAX_DISTANCE;
+    const normalizedY = dy / MAX_DISTANCE;
+    setVirtualJoystickInput({ x: normalizedX, y: normalizedY });
+  };
 
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      // Find the touch that started within the joystick base (supports multi-touch).
-      for (const touch of Array.from(e.changedTouches)) {
-        const dx = touch.clientX - centerX;
-        const dy = touch.clientY - centerY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+  const reset = () => {
+    activePointerIdRef.current = null;
+    setIsDragging(false);
+    setPosition({ x: 0, y: 0 });
+    setVirtualJoystickInput(null);
+  };
 
-        if (distance <= layout.joystickSize / 2) {
-          touchIdRef.current = touch.identifier;
-          setIsDragging(true);
-          updatePosition(touch.clientX, touch.clientY);
-          break;
-        }
-      }
-    };
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (uiControlsDisabled) return;
+    if (activePointerIdRef.current !== null) return;
+    if (!baseRef.current) return;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (touchIdRef.current === null) return;
+    const rect = baseRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = e.clientX - centerX;
+    const dy = e.clientY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > layout.joystickSize / 2) return;
 
-      const touch = Array.from(e.touches).find(t => t.identifier === touchIdRef.current);
-      if (!touch) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activePointerIdRef.current = e.pointerId;
+    baseRef.current.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+    updatePosition(e.clientX, e.clientY);
+  };
 
-      e.preventDefault();
-      updatePosition(touch.clientX, touch.clientY);
-    };
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (uiControlsDisabled) return;
+    if (activePointerIdRef.current !== e.pointerId) return;
+    e.preventDefault();
+    updatePosition(e.clientX, e.clientY);
+  };
 
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touch = Array.from(e.changedTouches).find(t => t.identifier === touchIdRef.current);
-      if (!touch) return;
-
-      touchIdRef.current = null;
-      setIsDragging(false);
-      setPosition({ x: 0, y: 0 });
-      setVirtualJoystickInput(null);
-    };
-
-    const updatePosition = (clientX: number, clientY: number) => {
-      if (!baseRef.current) return;
-
-      const rect = baseRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-
-      let dx = clientX - centerX;
-      let dy = clientY - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Clamp to max distance
-      if (distance > MAX_DISTANCE) {
-        const angle = Math.atan2(dy, dx);
-        dx = Math.cos(angle) * MAX_DISTANCE;
-        dy = Math.sin(angle) * MAX_DISTANCE;
-      }
-
-      setPosition({ x: dx, y: dy });
-
-      // Normalize and send to store
-      const normalizedX = dx / MAX_DISTANCE;
-      const normalizedY = dy / MAX_DISTANCE;
-      setVirtualJoystickInput({ x: normalizedX, y: normalizedY });
-    };
-
-    document.addEventListener('touchstart', handleTouchStart);
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd);
-
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [layout.joystickSize, layout.knobSize, setVirtualAscend, setVirtualJoystickInput, uiControlsDisabled]);
+  const handlePointerUpOrCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    reset();
+  };
 
   const handleAscendDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (uiControlsDisabled) return;
@@ -161,10 +148,15 @@ export const VirtualJoystick = () => {
 
       <div
         ref={baseRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
         className={`relative ${uiControlsDisabled ? 'pointer-events-none' : 'pointer-events-auto'}`}
         style={{
           width: `${layout.joystickSize}px`,
           height: `${layout.joystickSize}px`,
+          touchAction: 'none',
         }}
       >
         {/* Base circle */}

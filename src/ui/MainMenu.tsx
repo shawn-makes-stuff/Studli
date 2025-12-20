@@ -42,6 +42,7 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
   const setQuality = useBrickStore((state) => state.setQuality);
   const setTouchControlsEnabled = useBrickStore((state) => state.setTouchControlsEnabled);
   const setMovementControlMode = useBrickStore((state) => state.setMovementControlMode);
+  const setTouchToPlaceEnabled = useBrickStore((state) => state.setTouchToPlaceEnabled);
 
   const [view, setView] = useState<MenuView>('main');
   const [notice, setNotice] = useState<string | null>(null);
@@ -68,6 +69,11 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
   const title = useMemo(() => {
     return isMobile ? 'Studli' : 'Studli';
   }, [isMobile]);
+
+  const isTouchCapable = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints ?? 0) > 0;
+  }, []);
 
   const activeProjectName = useMemo(() => {
     if (!currentProjectId) return null;
@@ -326,7 +332,7 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
                   </div>
                 </div>
 
-                {isMobile && (
+                {isTouchCapable && (
                   <div className="space-y-4 pt-1">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -388,44 +394,73 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
                       <div className="flex items-center justify-between">
                         <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
                           <TuneIcon fontSize="small" />
-                          Move joystick sensitivity
+                          Touch-to-place
                         </div>
-                        <div className="text-gray-300 text-sm tabular-nums">
-                          {settings.joystickMoveSensitivity.toFixed(1)}x
-                        </div>
+                        <button
+                          onClick={() => {
+                            playSfx('click');
+                            setTouchToPlaceEnabled(!settings.touchToPlaceEnabled);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                            settings.touchToPlaceEnabled
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-gray-900 border-gray-700 text-gray-200'
+                          }`}
+                        >
+                          {settings.touchToPlaceEnabled ? 'On' : 'Off'}
+                        </button>
                       </div>
-                      <input
-                        type="range"
-                        min={40}
-                        max={200}
-                        value={Math.round(settings.joystickMoveSensitivity * 100)}
-                        onChange={(e) => setJoystickMoveSensitivity(Number(e.target.value) / 100)}
-                        className="w-full"
-                      />
+                      <div className="text-[11px] text-gray-400">
+                        Touch and drag to move the ghost brick, then lift to place.
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
-                          <TuneIcon fontSize="small" />
-                          Look joystick sensitivity
+                    {settings.touchControlsEnabled && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                              <TuneIcon fontSize="small" />
+                              Move joystick sensitivity
+                            </div>
+                            <div className="text-gray-300 text-sm tabular-nums">
+                              {settings.joystickMoveSensitivity.toFixed(1)}x
+                            </div>
+                          </div>
+                          <input
+                            type="range"
+                            min={40}
+                            max={200}
+                            value={Math.round(settings.joystickMoveSensitivity * 100)}
+                            onChange={(e) => setJoystickMoveSensitivity(Number(e.target.value) / 100)}
+                            className="w-full"
+                          />
                         </div>
-                        <div className="text-gray-300 text-sm tabular-nums">
-                          {settings.joystickLookSensitivity.toFixed(1)}x
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                              <TuneIcon fontSize="small" />
+                              Look joystick sensitivity
+                            </div>
+                            <div className="text-gray-300 text-sm tabular-nums">
+                              {settings.joystickLookSensitivity.toFixed(1)}x
+                            </div>
+                          </div>
+                          <input
+                            type="range"
+                            min={40}
+                            max={200}
+                            value={Math.round(settings.joystickLookSensitivity * 100)}
+                            onChange={(e) => setJoystickLookSensitivity(Number(e.target.value) / 100)}
+                            className="w-full"
+                          />
+                          <div className="text-[11px] text-gray-400">
+                            Adjusts how fast the camera turns when using the right joystick.
+                          </div>
                         </div>
                       </div>
-                      <input
-                        type="range"
-                        min={40}
-                        max={200}
-                        value={Math.round(settings.joystickLookSensitivity * 100)}
-                        onChange={(e) => setJoystickLookSensitivity(Number(e.target.value) / 100)}
-                        className="w-full"
-                      />
-                      <div className="text-[11px] text-gray-400">
-                        Adjusts how fast the camera turns when using the right joystick.
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
