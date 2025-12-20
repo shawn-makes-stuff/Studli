@@ -60,6 +60,26 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
     if (view === 'load') refreshProjectsFromStorage();
   }, [refreshProjectsFromStorage, view]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape') return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      playSfx('click');
+      if (view !== 'main') {
+        setView('main');
+        return;
+      }
+      closeMenu();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeMenu, view]);
+
   const showNotice = (message: string) => {
     setNotice(message);
     if (noticeTimeoutRef.current !== null) window.clearTimeout(noticeTimeoutRef.current);
@@ -171,7 +191,11 @@ export const MainMenu = ({ isMobile }: MainMenuProps) => {
                       playSfx('click');
                       startNewGame();
                     }}
-                    className={`w-full ${hasActiveSession ? 'h-10' : 'h-11'} rounded-xl bg-gray-800 hover:bg-gray-700 active:scale-[0.99] transition text-white font-semibold flex items-center justify-center gap-2 border border-gray-700`}
+                    className={`w-full ${hasActiveSession ? 'h-10' : 'h-11'} rounded-xl active:scale-[0.99] transition text-white font-semibold flex items-center justify-center gap-2 border ${
+                      hasActiveSession
+                        ? 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                        : 'bg-green-600 hover:bg-green-500 border-green-400'
+                    }`}
                   >
                     <AddCircleOutlineIcon fontSize="small" />
                     New Game

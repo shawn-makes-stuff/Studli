@@ -49,6 +49,7 @@ export const FirstPersonControls = () => {
   const isPointerLockedRef = useRef(false);
   const lastPointerLockExitAtRef = useRef(0);
   const escapeDownStartedLockedRef = useRef(false);
+  const escapeDownWithUiOpenRef = useRef(false);
   const raycasterRef = useRef(new THREE.Raycaster());
   const ndcRef = useRef(new THREE.Vector2(0, 0));
   const pinchRef = useRef<{
@@ -82,7 +83,7 @@ export const FirstPersonControls = () => {
   const touchToPlaceEnabled = useBrickStore((state) => state.settings.touchToPlaceEnabled);
   const isTouchDevice = detectMobile();
   const isTouchCapable = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator.maxTouchPoints ?? 0) > 0);
-  const disablePointerLock = !isTouchDevice && touchControlsEnabled;
+  const disablePointerLock = touchControlsEnabled;
 
   const controlsDisabled = uiControlsDisabled || menuOpen;
   const allowTouchControls = isTouchCapable && touchControlsEnabled && !controlsDisabled;
@@ -102,7 +103,7 @@ export const FirstPersonControls = () => {
     velocityRef.current.set(0, 0, 0);
   }, []);
 
-  // Touch controls on desktop: disable and exit pointer lock.
+  // Touch controls on: disable and exit pointer lock.
   useEffect(() => {
     if (!disablePointerLock) return;
 
@@ -122,7 +123,7 @@ export const FirstPersonControls = () => {
     ndcRef.current.set(x, y);
   };
 
-  // Desktop + touch controls: allow mouse/pen pointer to drive placement without pointer lock.
+  // Touch controls enabled: allow mouse/pen pointer to drive placement without pointer lock.
   useEffect(() => {
     if (!disablePointerLock) return;
     if (controlsDisabled) return;
@@ -604,7 +605,7 @@ export const FirstPersonControls = () => {
 
   // Mouse wheel zoom (desktop only)
   useEffect(() => {
-    if (isTouchDevice) return;
+    if (isTouchDevice && touchControlsEnabled) return;
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
 
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -631,12 +632,12 @@ export const FirstPersonControls = () => {
     return () => {
       document.removeEventListener('wheel', handleWheel);
     };
-  }, [camera, gl.domElement, isTouchDevice]);
+  }, [camera, gl.domElement, isTouchDevice, touchControlsEnabled]);
 
   // Left click to place/confirm while pointer-locked (desktop only).
   // This avoids relying on pointer hit-testing (which can be stale/unrelated in pointer lock).
   useEffect(() => {
-    if (isTouchDevice) return;
+    if (isTouchDevice && touchControlsEnabled) return;
 
     const handleMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
@@ -648,7 +649,7 @@ export const FirstPersonControls = () => {
     return () => {
       gl.domElement.removeEventListener('mousedown', handleMouseDown);
     };
-  }, [gl.domElement, isTouchDevice]);
+  }, [gl.domElement, isTouchDevice, touchControlsEnabled]);
 
   // Touch interactions (touch-capable devices): tap-to-place, touch-to-place, pinch zoom.
   useEffect(() => {
@@ -876,7 +877,7 @@ export const FirstPersonControls = () => {
 
   // Suppress browser shortcuts/scrolling while in build mode (pointer-locked).
   useEffect(() => {
-    if (isTouchDevice) return;
+    if (isTouchDevice && touchControlsEnabled) return;
 
     const shouldSuppress = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
@@ -904,15 +905,22 @@ export const FirstPersonControls = () => {
       window.removeEventListener('keydown', handleKeyDownCapture, true);
       window.removeEventListener('keyup', handleKeyUpCapture, true);
     };
-  }, [gl.domElement, isTouchDevice]);
+  }, [gl.domElement, isTouchDevice, touchControlsEnabled]);
 
-  // Pointer lock management (desktop only)
+  // Pointer lock management (touch controls off)
   useEffect(() => {
-    if (isTouchDevice || disablePointerLock) return;
+    if (disablePointerLock) return;
 
     const keyboard = (navigator as unknown as {
       keyboard?: { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
     }).keyboard;
+
+    const canRequestPointerLock = () => {
+      const uiState = useBrickStore.getState();
+      const popoverBlocksPointerLock = uiState.uiPopoverOpen && uiState.uiPopoverType !== 'brickPicker';
+      if (uiState.menuOpen || popoverBlocksPointerLock || uiState.uiControlsDisabled) return false;
+      return true;
+    };
 
     const tryLockKeyboard = () => {
       if (!keyboard?.lock) return;
@@ -944,6 +952,14 @@ export const FirstPersonControls = () => {
       }
     };
 
+    const requestPointerLock = () => {
+      if (!canRequestPointerLock()) return;
+      if (document.pointerLockElement === gl.domElement) return;
+      if (typeof gl.domElement.requestPointerLock !== 'function') return;
+      gl.domElement.requestPointerLock();
+      tryLockKeyboard();
+    };
+
     const handlePointerLockChange = () => {
       const locked = document.pointerLockElement === gl.domElement;
       setIsPointerLocked(locked);
@@ -964,6 +980,8 @@ export const FirstPersonControls = () => {
       // Track whether this press started while locked so the subsequent keyup
       // doesn't immediately re-lock.
       escapeDownStartedLockedRef.current = isPointerLockedRef.current;
+      const uiState = useBrickStore.getState();
+      escapeDownWithUiOpenRef.current = uiState.menuOpen || uiState.uiPopoverOpen || uiState.uiControlsDisabled;
 
       if (isPointerLockedRef.current) {
         document.exitPointerLock();
@@ -976,14 +994,18 @@ export const FirstPersonControls = () => {
       // If this Esc press started while locked, treat it as "unlock" only.
       if (escapeDownStartedLockedRef.current) {
         escapeDownStartedLockedRef.current = false;
+        escapeDownWithUiOpenRef.current = false;
+        return;
+      }
+
+      if (escapeDownWithUiOpenRef.current) {
+        escapeDownWithUiOpenRef.current = false;
         return;
       }
 
       // Never (re)capture the mouse while a menu/popover is open.
       // This keeps Esc from stealing focus when you're interacting with UI.
-      const uiState = useBrickStore.getState();
-      const popoverBlocksPointerLock = uiState.uiPopoverOpen && uiState.uiPopoverType !== 'brickPicker';
-      if (uiState.menuOpen || popoverBlocksPointerLock || uiState.uiControlsDisabled) return;
+      if (!canRequestPointerLock()) return;
 
       // Some browsers release pointer lock before dispatching Esc; avoid re-locking immediately.
       const now = performance.now();
@@ -991,8 +1013,8 @@ export const FirstPersonControls = () => {
       if (justExitedPointerLock) return;
 
       if (!isPointerLockedRef.current) {
-        gl.domElement.requestPointerLock();
-        tryLockKeyboard();
+        if (isTouchDevice) return;
+        requestPointerLock();
       }
     };
 
@@ -1011,18 +1033,27 @@ export const FirstPersonControls = () => {
       camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
     };
 
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      if (!event.isPrimary) return;
+      if (document.pointerLockElement === gl.domElement) return;
+      requestPointerLock();
+    };
+
     document.addEventListener('pointerlockchange', handlePointerLockChange);
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('mousemove', handleMouseMove);
+    gl.domElement.addEventListener('pointerdown', handlePointerDown);
 
     return () => {
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('mousemove', handleMouseMove);
+      gl.domElement.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [isTouchDevice, disablePointerLock, gl, camera, isPointerLocked, clearMovementState]);
+  }, [disablePointerLock, gl, camera, isPointerLocked, clearMovementState, isTouchDevice]);
 
   // Camera rotation state for mobile joystick
   const cameraRotationRef = useRef({ x: 0, y: 0 });

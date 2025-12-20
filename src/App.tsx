@@ -176,7 +176,7 @@ function App() {
       {/* UI Overlays */}
       {!menuOpen && <Crosshair />}
       {!requireLandscape && !menuOpen && <BottomBar />}
-      {!isMobile && !requireLandscape && !menuOpen && !uiPopoverOpen && !settings.touchControlsEnabled && <DesktopControlsHint />}
+      {!requireLandscape && !menuOpen && !uiPopoverOpen && !settings.touchControlsEnabled && <DesktopControlsHint />}
       {!requireLandscape && !menuOpen && !uiPopoverOpen && <MenuButton />}
       {!requireLandscape && !menuOpen && !uiPopoverOpen && (
         <ConnectionPointCycleButton hideWhenPointerLocked={!isMobile} />

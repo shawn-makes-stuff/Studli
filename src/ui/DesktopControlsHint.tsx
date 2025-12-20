@@ -54,7 +54,7 @@ export const DesktopControlsHint = ({ hidden }: DesktopControlsHintProps) => {
       <div className="max-w-[92vw] flex items-start gap-2 bg-gray-800/95 border border-gray-600 rounded-lg px-3 py-2 shadow-lg backdrop-blur-sm">
         <div className="text-[11px] sm:text-xs text-gray-100 leading-snug">
           <div>
-            Press <span className="font-semibold">Esc</span> to enter build mode (press again to exit).
+            Click/tap to enter build mode (press <span className="font-semibold">Esc</span> to exit).
           </div>
           <div className="text-gray-200">
             WASD to move · Mouse to look · Click to place · Wheel to zoom
@@ -76,4 +76,3 @@ export const DesktopControlsHint = ({ hidden }: DesktopControlsHintProps) => {
     </div>
   );
 };
-

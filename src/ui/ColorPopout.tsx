@@ -175,6 +175,23 @@ export const ColorPopout = ({
     if (!isOpen) setIsCustomPickerOpen(false);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      playSfx('click');
+      if (isCustomPickerOpen) {
+        setIsCustomPickerOpen(false);
+        return;
+      }
+      onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCustomPickerOpen, isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handlePresetSelect = (color: string) => {
@@ -383,17 +400,7 @@ export const ColorPopout = ({
                       />
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        onClick={() => {
-                          playSfx('click');
-                          onClose();
-                        }}
-                        className="px-4 py-2 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm border border-gray-700 active:scale-95 transition"
-                      >
-                        Done
-                      </button>
-                    </div>
+                    <div className="pt-1" />
                   </div>
                 ) : (
                   <div className="text-sm text-gray-300">
@@ -615,17 +622,7 @@ export const ColorPopout = ({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    playSfx('click');
-                    setIsCustomPickerOpen(false);
-                  }}
-                  className="px-4 py-2 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm border border-gray-700 active:scale-95 transition"
-                >
-                  Done
-                </button>
-              </div>
+              <div className="pt-2" />
               </div>
             </div>
           </div>

@@ -131,6 +131,20 @@ export const BrickPickerPopout = ({ isOpen, onClose, currentBrick, onBrickSelect
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose, anchorRef, isPinned]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape') return;
+      if (isPinned) return;
+      event.preventDefault();
+      event.stopPropagation();
+      playSfx('click');
+      onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isPinned, onClose]);
+
   // Throttle position/size updates to the next animation frame and apply directly to the element for snappier drag/resize
   const requestFrame = useCallback(() => {
     if (frameRef.current !== null) return;
